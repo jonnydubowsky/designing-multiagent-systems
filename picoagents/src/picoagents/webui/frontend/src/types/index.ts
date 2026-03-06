@@ -3,6 +3,7 @@
  */
 
 export * from "./picoagents";
+export * from "./eval";
 
 // Import core types from picoagents for convenience
 import type {

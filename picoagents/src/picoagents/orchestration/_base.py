@@ -84,6 +84,7 @@ class BaseOrchestrator(ComponentBase[BaseModel], ABC):
         self,
         task: Union[str, UserMessage, List[Message]],
         cancellation_token: Optional[CancellationToken] = None,
+        persist: bool = False,
     ) -> OrchestrationResponse:
         """
         Execute the orchestration pattern.
@@ -91,6 +92,8 @@ class BaseOrchestrator(ComponentBase[BaseModel], ABC):
         Args:
             task: The task to orchestrate (same type as agent.run())
             cancellation_token: Optional cancellation token
+            persist: If True, save the run to ~/.picoagents/ (DB
+                index + JSON file with full response data)
 
         Returns:
             OrchestrationResponse with messages, usage, and metadata
@@ -105,7 +108,7 @@ class BaseOrchestrator(ComponentBase[BaseModel], ABC):
                 if isinstance(item, OrchestrationResponse):
                     final_result = item
 
-            return final_result or self._create_fallback_result("No result produced")
+            result = final_result or self._create_fallback_result("No result produced")
 
         except asyncio.CancelledError:
             # Re-raise cancellation for caller to handle
@@ -113,7 +116,7 @@ class BaseOrchestrator(ComponentBase[BaseModel], ABC):
         except Exception as e:
             # Handle errors gracefully
             elapsed_time = int((time.time() - (self.start_time or time.time())) * 1000)
-            return OrchestrationResponse(
+            result = OrchestrationResponse(
                 messages=self.shared_messages,
                 final_result=f"Orchestration failed: {str(e)}",
                 usage=Usage(duration_ms=elapsed_time),
@@ -122,6 +125,21 @@ class BaseOrchestrator(ComponentBase[BaseModel], ABC):
                 ),
                 pattern_metadata=self._get_pattern_metadata(),
             )
+
+        if persist:
+            try:
+                from ..store import get_default_store
+
+                store = get_default_store()
+                await store.save_orchestrator_run(self, result)
+            except Exception as e:
+                import logging
+
+                logging.getLogger(__name__).warning(
+                    f"Failed to persist orchestrator run: {e}"
+                )
+
+        return result
 
     async def run_stream(
         self,

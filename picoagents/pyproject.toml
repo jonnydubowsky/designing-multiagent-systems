@@ -33,10 +33,16 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+persist = [
+    "sqlmodel>=0.0.16",
+    "aiosqlite>=0.20.0",
+]
 web = [
     "fastapi>=0.100.0",
     "uvicorn[standard]>=0.23.0",
     "python-multipart>=0.0.6",
+    "sqlmodel>=0.0.16",
+    "aiosqlite>=0.20.0",
 ]
 computer-use = [
     "playwright>=1.40.0", 

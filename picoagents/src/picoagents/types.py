@@ -55,7 +55,7 @@ class ToolResult(BaseModel):
 
     success: bool = Field(..., description="Whether tool execution succeeded")
     result: Any = Field(..., description="The actual result data")
-    error: Optional[str] = Field(None, description="Error message if failed")
+    error: Optional[str] = Field(default=None, description="Error message if failed")
     metadata: Dict[str, Any] = Field(
         default_factory=dict, description="Execution time, etc."
     )
@@ -68,7 +68,7 @@ class AgentResponse(BaseModel):
     """Final result from agent.run() containing context with all state and messages."""
 
     context: Optional["AgentContext"] = Field(
-        None, description="Complete context with messages and state"
+        default=None, description="Complete context with messages and state"
     )
     source: str = Field(..., description="Source agent that generated this response")
     usage: Usage = Field(
@@ -175,10 +175,10 @@ class ChatCompletionChunk(BaseModel):
     content: str = Field(..., description="Partial text content from stream")
     is_complete: bool = Field(..., description="Whether this is the final chunk")
     tool_call_chunk: Optional[Dict[str, Any]] = Field(
-        None, description="Partial tool call data"
+        default=None, description="Partial tool call data"
     )
     usage: Optional["Usage"] = Field(
-        None,
+        default=None,
         description="Token usage statistics (only present in final chunk when stream_options.include_usage=true)",
     )
 
@@ -329,7 +329,7 @@ class ToolValidationEvent(BaseEvent):
     )
     tool_name: str = Field(..., description="Name of the tool being validated")
     is_valid: bool = Field(..., description="Whether parameters are valid")
-    errors: Optional[List[str]] = Field(None, description="Validation error messages")
+    errors: Optional[List[str]] = Field(default=None, description="Validation error messages")
 
 
 # Memory Events
@@ -502,7 +502,7 @@ class AgentSelectionEvent(BaseEvent):
     )
     selected_agent: str = Field(..., description="Name of selected agent")
     selection_reason: Optional[str] = Field(
-        None, description="Why this agent was selected"
+        default=None, description="Why this agent was selected"
     )
 
 
@@ -549,9 +549,9 @@ class Task(BaseModel):
     name: str = Field(..., description="Human-readable task name")
     input: str = Field(..., description="Input/prompt for the task")
     expected_output: Optional[str] = Field(
-        None, description="Expected output for comparison"
+        default=None, description="Expected output for comparison"
     )
-    id: Optional[str] = Field(None, description="Unique task identifier")
+    id: Optional[str] = Field(default=None, description="Unique task identifier")
     category: str = Field(default="general", description="Task category for filtering")
     eval_criteria: List[str] = Field(
         default_factory=list, description="Criteria to evaluate on"
@@ -574,8 +574,8 @@ class RunTrajectory(BaseModel):
     task: Task = Field(..., description="The task that was run")
     messages: Sequence[Message] = Field(..., description="Complete message sequence")
     success: bool = Field(..., description="Whether execution succeeded")
-    error: Optional[str] = Field(None, description="Error message if failed")
-    usage: Optional[Usage] = Field(None, description="Resource consumption")
+    error: Optional[str] = Field(default=None, description="Error message if failed")
+    usage: Optional[Usage] = Field(default=None, description="Resource consumption")
     metadata: Dict[str, Any] = Field(
         default_factory=dict, description="Additional execution metadata"
     )
@@ -595,7 +595,7 @@ class EvalScore(BaseModel):
         default_factory=dict, description="Reasoning for each dimension"
     )
     trajectory: Optional["RunTrajectory"] = Field(
-        None, description="The trajectory that was scored"
+        default=None, description="The trajectory that was scored"
     )
     metadata: Dict[str, Any] = Field(
         default_factory=dict, description="Additional scoring metadata"

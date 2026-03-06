@@ -53,14 +53,14 @@ class NextActionPlan(BaseModel):
 
     action_type: ActionType = Field(description="Type of action to perform")
     selector: Optional[str] = Field(
-        None, description="CSS selector for the target element"
+        default=None, description="CSS selector for the target element"
     )
     value: Optional[str] = Field(
-        None,
+        default=None,
         description="Value to input (for type/select actions) or URL (for navigate)",
     )
     coordinates: Optional[Dict[str, int]] = Field(
-        None, description="Coordinates for click if selector fails"
+        default=None, description="Coordinates for click if selector fails"
     )
     reasoning: str = Field(description="Why this action is being taken")
     expected_outcome: str = Field(description="What should happen after this action")
@@ -105,7 +105,7 @@ class TaskCompletion(BaseModel):
     )
     summary: str = Field(description="Summary of what was accomplished")
     remaining_work: Optional[str] = Field(
-        None, description="What still needs to be done if incomplete"
+        default=None, description="What still needs to be done if incomplete"
     )
 
 

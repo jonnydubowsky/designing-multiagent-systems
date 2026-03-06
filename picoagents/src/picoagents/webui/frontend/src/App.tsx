@@ -10,6 +10,8 @@ import { DebugPanel } from "@/components/shared/debug-panel";
 import { AgentView } from "@/components/agent/agent-view";
 import { OrchestratorView } from "@/components/orchestrator/orchestrator-view";
 import { WorkflowView } from "@/components/workflow/workflow-view";
+import { RunsView } from "@/components/runs/runs-view";
+import { EvalView } from "@/components/eval/eval-view";
 import { LoadingState } from "@/components/ui/loading-state";
 import { ExamplesGallery } from "@/components/shared/examples-gallery";
 import { apiClient } from "@/services/api";
@@ -24,8 +26,11 @@ import type {
   SessionInfo,
 } from "@/types";
 
+type AppMode = "entities" | "runs" | "evaluate";
+
 
 export default function App() {
+  const [appMode, setAppMode] = useState<AppMode>("entities");
   const [appState, setAppState] = useState<AppState>({
     entities: [],
     agents: [],
@@ -315,8 +320,8 @@ export default function App() {
     );
   }
 
-  // Show error state if loading failed
-  if (appState.error) {
+  // Show error state if loading failed (only blocks entities mode)
+  if (appState.error && appMode === "entities") {
     return (
       <div className="h-screen flex flex-col bg-background">
         <AppHeader
@@ -324,6 +329,8 @@ export default function App() {
           selectedEntity={undefined}
           onSelect={() => {}}
           isLoading={false}
+          appMode={appMode}
+          onAppModeChange={setAppMode}
         />
 
         {/* Error Content */}
@@ -342,7 +349,46 @@ export default function App() {
     );
   }
 
-  // Show empty state if no entities are available
+  // Runs and Evaluate modes work regardless of entities
+  if (appMode === "runs") {
+    return (
+      <div className="h-screen flex flex-col bg-background">
+        <AppHeader
+          entities={appState.entities}
+          selectedEntity={appState.selectedEntity}
+          onSelect={handleEntitySelect}
+          isLoading={appState.isLoading}
+          onDeleteEntity={handleDeleteEntity}
+          appMode={appMode}
+          onAppModeChange={setAppMode}
+        />
+        <div className="flex-1 overflow-hidden">
+          <RunsView />
+        </div>
+      </div>
+    );
+  }
+
+  if (appMode === "evaluate") {
+    return (
+      <div className="h-screen flex flex-col bg-background">
+        <AppHeader
+          entities={appState.entities}
+          selectedEntity={appState.selectedEntity}
+          onSelect={handleEntitySelect}
+          isLoading={appState.isLoading}
+          onDeleteEntity={handleDeleteEntity}
+          appMode={appMode}
+          onAppModeChange={setAppMode}
+        />
+        <div className="flex-1 overflow-hidden">
+          <EvalView />
+        </div>
+      </div>
+    );
+  }
+
+  // Show empty state if no entities are available (entities mode)
   if (
     !appState.isLoading &&
     appState.entities.length === 0
@@ -354,6 +400,8 @@ export default function App() {
           selectedEntity={undefined}
           onSelect={() => {}}
           isLoading={false}
+          appMode={appMode}
+          onAppModeChange={setAppMode}
         />
 
         {/* Empty State Content - Show Gallery */}
@@ -429,6 +477,8 @@ export default function App() {
         onSelect={handleEntitySelect}
         isLoading={appState.isLoading}
         onDeleteEntity={handleDeleteEntity}
+        appMode={appMode}
+        onAppModeChange={setAppMode}
       />
 
       {/* Main Content - Split Panel with explicit height */}

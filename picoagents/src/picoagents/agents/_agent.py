@@ -89,6 +89,7 @@ class Agent(Component[AgentConfig], BaseAgent):
         task: Optional[Union[str, UserMessage, List[Message]]] = None,
         context: Optional[AgentContext] = None,
         cancellation_token: Optional[CancellationToken] = None,
+        persist: bool = False,
     ) -> AgentResponse:
         """
         Execute the agent's main reasoning and action loop.
@@ -112,24 +113,54 @@ class Agent(Component[AgentConfig], BaseAgent):
                 point (typically empty).
             cancellation_token: Optional token for cancelling
                 execution
+            persist: If True, save the run to ~/.picoagents/ (DB
+                index + JSON file with full response data)
 
         Returns:
             AgentResponse containing context with all state and
             messages
         """
+        trace_id = None
+
         # Wrap execution in OpenTelemetry span if enabled
         if self._should_create_span():
             try:
                 from opentelemetry import trace
 
                 tracer = trace.get_tracer("picoagents")
-                with tracer.start_as_current_span(f"agent {self.name}"):
-                    return await self._run_internal(task, context, cancellation_token)
+                with tracer.start_as_current_span(f"agent {self.name}") as span:
+                    response = await self._run_internal(
+                        task, context, cancellation_token
+                    )
+                    if persist:
+                        ctx = span.get_span_context()
+                        trace_id = format(ctx.trace_id, "032x")
             except Exception:
                 # If OTel fails, fall back to normal execution
-                return await self._run_internal(task, context, cancellation_token)
+                response = await self._run_internal(
+                    task, context, cancellation_token
+                )
         else:
-            return await self._run_internal(task, context, cancellation_token)
+            response = await self._run_internal(
+                task, context, cancellation_token
+            )
+
+        if persist:
+            try:
+                from ..store import get_default_store
+
+                store = get_default_store()
+                await store.save_agent_run(
+                    self, response, trace_id=trace_id
+                )
+            except Exception as e:
+                import logging
+
+                logging.getLogger(__name__).warning(
+                    f"Failed to persist run: {e}"
+                )
+
+        return response
 
     async def _run_internal(
         self,
@@ -302,6 +333,7 @@ class Agent(Component[AgentConfig], BaseAgent):
                     agent_context=working_context,
                     llm_messages=llm_messages,
                     agent_name=self.name,
+                    model_client=self.model_client,
                 )
                 for hook in self.start_hooks:
                     injection = await hook.on_start(loop_ctx)

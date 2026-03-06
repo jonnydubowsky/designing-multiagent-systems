@@ -56,6 +56,7 @@ class LoopContext:
         iteration: Current loop iteration (0-indexed)
         restart_count: How many times end hooks have resumed the loop
         metadata: Mutable dict for hooks to share state
+        model_client: The agent's model client (for hooks that need LLM calls)
     """
 
     agent_context: AgentContext
@@ -64,6 +65,7 @@ class LoopContext:
     iteration: int = 0
     restart_count: int = 0
     metadata: Dict[str, Any] = field(default_factory=dict)
+    model_client: Any = None
 
 
 # =============================================================================
@@ -343,3 +345,191 @@ class CompletionCheckHook(BaseEndHook):
 
     def __repr__(self) -> str:
         return f"CompletionCheckHook(termination={self.termination!r})"
+
+
+class LLMCompletionCheckHook(BaseEndHook):
+    """End hook that uses an LLM to judge whether the task is complete.
+
+    When the agent would stop (no tool calls), this hook:
+    1. Extracts the original task from the conversation
+    2. Builds a summary of the full conversation (tool calls + results + responses)
+    3. Asks a judge model: "Is this task complete?"
+    4. If not complete: injects a message telling the agent to continue
+    5. If complete or termination limit reached: allows stop
+
+    This is generic — no hardcoded logic about files, todos, or specific
+    task types. The LLM judges completion based on the task description
+    and conversation history.
+
+    Args:
+        model_client: LLM client for the completion check. If None,
+            uses the agent's own model_client from LoopContext.
+        termination: Termination condition. Defaults to MaxRestartsTermination(2).
+        max_restarts: Shorthand for MaxRestartsTermination(N). Ignored if
+            termination is provided.
+
+    Example:
+        # Uses agent's own model client:
+        agent = Agent(
+            ...,
+            end_hooks=[LLMCompletionCheckHook(max_restarts=3)],
+        )
+
+        # Or with a separate (cheaper) judge model:
+        judge = OpenAIChatCompletionClient(model="gpt-4.1-mini")
+        agent = Agent(
+            ...,
+            end_hooks=[LLMCompletionCheckHook(
+                model_client=judge, max_restarts=3,
+            )],
+        )
+    """
+
+    def __init__(
+        self,
+        model_client: Any = None,
+        termination: Optional[TerminationCondition] = None,
+        max_restarts: int = 2,
+    ):
+        self.model_client = model_client
+        if termination is not None:
+            self.termination = termination
+        else:
+            self.termination = MaxRestartsTermination(max_restarts)
+
+    def _build_conversation_summary(
+        self, messages: List[Message], max_chars: int = 6000
+    ) -> str:
+        """Build a condensed summary of the full conversation.
+
+        Includes tool calls with parameter AND result summaries,
+        plus any text responses from the agent.
+        """
+        lines: List[str] = []
+        total_chars = 0
+
+        for msg in messages:
+            role = getattr(msg, "role", "")
+            content = getattr(msg, "content", "")
+
+            if role == "user" and getattr(msg, "source", "") != "hook":
+                # Skip the original task — it's shown separately
+                continue
+
+            if role == "user" and getattr(msg, "source", "") == "hook":
+                line = f"[HOOK] {content[:200]}"
+            elif role == "assistant":
+                tool_calls = getattr(msg, "tool_calls", None)
+                if tool_calls:
+                    for tc in tool_calls:
+                        params = str(tc.parameters)[:100]
+                        line = f"[CALL] {tc.tool_name}({params})"
+                        lines.append(line)
+                        total_chars += len(line)
+                    if content and content.strip():
+                        line = f"[TEXT] {content[:300]}"
+                    else:
+                        continue
+                else:
+                    # Final response text
+                    line = f"[RESPONSE] {content[:500]}"
+            elif role == "tool":
+                # Show tool result size and preview
+                size = len(content)
+                preview = content[:150].replace("\n", " ")
+                tool_name = getattr(msg, "tool_name", "?")
+                line = f"[RESULT] {tool_name} ({size} chars): {preview}"
+            else:
+                continue
+
+            if total_chars + len(line) > max_chars:
+                lines.append(f"... ({len(messages) - len(lines)} more messages truncated)")
+                break
+
+            lines.append(line)
+            total_chars += len(line)
+
+        return "\n".join(lines)
+
+    async def on_end(self, context: LoopContext) -> Optional[str]:
+        if self.termination.should_terminate(context):
+            return None
+
+        # Resolve model client: explicit > from context
+        client = self.model_client or context.model_client
+        if client is None:
+            return None  # No client available, allow stop
+
+        # Extract original task (first user message)
+        task = ""
+        for msg in context.llm_messages:
+            if hasattr(msg, "role") and msg.role == "user":
+                task = msg.content
+                break
+
+        if not task:
+            return None
+
+        # Build rich conversation summary
+        summary = self._build_conversation_summary(context.llm_messages)
+
+        # Ask the judge model
+        from .messages import UserMessage as UM, SystemMessage as SM
+
+        judge_messages = [
+            SM(
+                content=(
+                    "You are a strict task completion judge. Given a task "
+                    "and a log of what an agent has done, determine if the "
+                    "task is COMPLETE.\n\n"
+                    "The log shows every tool call the agent made, what "
+                    "results it got, and what text it produced.\n\n"
+                    "Reply with exactly one of:\n"
+                    "- COMPLETE: <reason>\n"
+                    "- INCOMPLETE: <what specific work remains>\n\n"
+                    "Be strict. Judge based on what the agent ACTUALLY DID "
+                    "(the tool calls and results), not what it CLAIMS to "
+                    "have done in its response text. If the task requires "
+                    "reading files and the agent only read a few, that is "
+                    "INCOMPLETE even if the agent wrote a confident review."
+                ),
+                source="system",
+            ),
+            UM(
+                content=(
+                    f"## Original Task\n{task}\n\n"
+                    f"## Agent Activity Log\n{summary}\n\n"
+                    f"Is the task COMPLETE or INCOMPLETE?"
+                ),
+                source="judge",
+            ),
+        ]
+
+        try:
+            result = await client.create(judge_messages)
+            response_text = result.message.content.strip()
+            response_upper = response_text.upper()
+
+            if response_upper.startswith("COMPLETE"):
+                return None  # Task is done, allow stop
+
+            # Extract reason if provided
+            if ":" in response_text:
+                reason = response_text.split(":", 1)[1].strip()
+            else:
+                reason = "The task is not yet complete."
+
+            return (
+                f"You are not done yet. {reason}\n\n"
+                f"Continue working on the task. Do not stop until "
+                f"the task is fully complete. Do not ask for user input."
+            )
+        except Exception:
+            # If judge call fails, allow stop rather than blocking
+            return None
+
+    def __repr__(self) -> str:
+        return (
+            f"LLMCompletionCheckHook("
+            f"termination={self.termination!r})"
+        )

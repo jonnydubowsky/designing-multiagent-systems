@@ -38,9 +38,9 @@ class BaseAgent(ComponentBase[BaseModel], ABC):
     def __init__(
         self,
         name: str,
-        description: str,
         instructions: str,
         model_client: BaseChatCompletionClient,
+        description: str = "",
         tools: Optional[List[Union[BaseTool, Callable]]] = None,
         memory: Optional[BaseMemory] = None,
         context: Optional[AgentContext] = None,
@@ -60,9 +60,9 @@ class BaseAgent(ComponentBase[BaseModel], ABC):
 
         Args:
             name: Unique identifier for the agent
-            description: External-facing description for orchestrators/other agents
             instructions: Internal system prompt/role definition for LLM calls
             model_client: Abstraction for LLM API calls
+            description: External-facing description for orchestrators/other agents
             tools: Available tools for the agent
             memory: Persistent storage for agent state
             context: Agent context containing messages and metadata
@@ -107,9 +107,6 @@ class BaseAgent(ComponentBase[BaseModel], ABC):
         """Validate agent configuration."""
         if not self.name or not isinstance(self.name, str):
             raise AgentConfigurationError("Agent name must be a non-empty string")
-
-        if not self.description:
-            raise AgentConfigurationError("Agent description cannot be empty")
 
         if not self.instructions:
             raise AgentConfigurationError("Agent instructions cannot be empty")
@@ -165,6 +162,7 @@ class BaseAgent(ComponentBase[BaseModel], ABC):
         self,
         task: Union[str, UserMessage, List[Message]],
         cancellation_token: Optional[CancellationToken] = None,
+        persist: bool = False,
     ) -> AgentResponse:
         """
         Execute the agent's main reasoning and action loop.
@@ -172,6 +170,8 @@ class BaseAgent(ComponentBase[BaseModel], ABC):
         Args:
             task: The task or query for the agent to address
             cancellation_token: Optional token for cancelling execution
+            persist: If True, save the run to ~/.picoagents/ (DB index
+                + JSON file with full response data)
 
         Returns:
             AgentResponse containing messages and usage statistics

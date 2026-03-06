@@ -32,17 +32,17 @@ class RunEntityRequest(BaseModel):
     """Request model for entity execution - minimal wrapper around PicoAgents types."""
 
     messages: Optional[List[Message]] = Field(
-        None, description="List of messages (for agents/orchestrators)"
+        default=None, description="List of messages (for agents/orchestrators)"
     )
-    input_data: Optional[Any] = Field(None, description="Input data (for workflows)")
+    input_data: Optional[Any] = Field(default=None, description="Input data (for workflows)")
     session_id: Optional[str] = Field(
-        None, description="Optional session ID for tracking"
+        default=None, description="Optional session ID for tracking"
     )
     stream_tokens: bool = Field(
         True, description="Enable token-level streaming for agents (default: True)"
     )
     approval_responses: Optional[List[ToolApprovalResponse]] = Field(
-        None, description="Tool approval responses to inject into session context"
+        default=None, description="Tool approval responses to inject into session context"
     )
 
 
@@ -71,13 +71,33 @@ class PicoAgentsWebUIServer:
         self.session_manager = SessionManager()
         self.execution_engine = ExecutionEngine(self.session_manager)
 
+        # Persistence store (optional — requires picoagents[persist])
+        self._store = None
+        try:
+            from ..store import PicoStore
+
+            self._store = PicoStore()
+        except ImportError:
+            logger.info(
+                "sqlmodel not installed — persistence disabled. "
+                "Install with: pip install picoagents[persist]"
+            )
+
     def create_app(self) -> FastAPI:
         """Create the FastAPI application with all routes and middleware."""
+        store = self._store
 
         @asynccontextmanager
         async def lifespan(app: FastAPI):
             # Startup
             logger.info("Starting PicoAgents WebUI Server")
+            if store is not None:
+                await store.initialize()
+                app.state.store = store
+                from ._eval_jobs import EvalJobManager
+
+                app.state.eval_jobs = EvalJobManager(store)
+                logger.info("Persistence store initialized")
             yield
             # Shutdown
             logger.info("Shutting down PicoAgents WebUI Server")
@@ -99,6 +119,15 @@ class PicoAgentsWebUIServer:
             )
 
         self._register_routes(app)
+
+        # Include persistence routers if store is available
+        if store is not None:
+            from ._eval_router import router as eval_router
+            from ._runs_router import router as runs_router
+
+            app.include_router(runs_router)
+            app.include_router(eval_router)
+
         self._mount_frontend(app)
         return app
 

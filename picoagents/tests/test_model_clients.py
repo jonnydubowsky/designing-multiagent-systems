@@ -355,22 +355,26 @@ class TestModelClients:
 
 
 @pytest.mark.skipif(
-    not os.getenv("OPENAI_API_KEY"),
-    reason="OPENAI_API_KEY not set"
+    not os.getenv("AZURE_OPENAI_API_KEY"),
+    reason="AZURE_OPENAI_API_KEY not set"
 )
 class TestOpenAIIntegration:
-    """Integration tests for OpenAI client (requires API key)."""
+    """Integration tests for Azure OpenAI client (requires API key)."""
 
     @pytest.mark.asyncio
     async def test_openai_basic_completion(self):
-        """Test actual OpenAI API call."""
-        client = OpenAIChatCompletionClient(
+        """Test actual Azure OpenAI API call."""
+        client = AzureOpenAIChatCompletionClient(
             model="gpt-4.1-mini",
-            api_key=os.getenv("OPENAI_API_KEY")
+            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
+            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
         )
 
         messages = [
-            UserMessage(content="Say 'Hello' in one word", source="user")
+            UserMessage(
+                content="Say 'Hello' in one word",
+                source="user",
+            )
         ]
 
         result = await client.create(messages, max_tokens=10)

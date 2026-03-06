@@ -6,6 +6,7 @@ scores results with judges, and collects metrics.
 """
 
 import asyncio
+import copy
 import shutil
 import tempfile
 from pathlib import Path
@@ -137,6 +138,7 @@ class EvalRunner:
         targets: Sequence[Target],
         task_filter: Optional[Callable[[Task], bool]] = None,
         cancellation_token: Optional[CancellationToken] = None,
+        persist: bool = False,
     ) -> EvalResults:
         """Execute full evaluation of dataset against multiple targets.
 
@@ -148,6 +150,8 @@ class EvalRunner:
             targets: Targets to evaluate
             task_filter: Optional filter to select subset of tasks
             cancellation_token: For cancellation support
+            persist: If True, save results to ~/.picoagents/ (DB
+                index + JSON file with full eval data)
 
         Returns:
             EvalResults with full results matrix
@@ -184,6 +188,25 @@ class EvalRunner:
                 for task_result in task_results:
                     results.add_result(task_result)
 
+        if persist:
+            try:
+                # Save JSON file via existing method
+                file_path = results.save()
+
+                # Index in DB
+                from ..store import get_default_store
+
+                store = get_default_store()
+                await store.save_eval_run_from_results(
+                    results, file_path=file_path
+                )
+            except Exception as e:
+                import logging
+
+                logging.getLogger(__name__).warning(
+                    f"Failed to persist eval results: {e}"
+                )
+
         return results
 
     async def run_configs(
@@ -192,6 +215,7 @@ class EvalRunner:
         configs: List[AgentConfig],
         task_filter: Optional[Callable[[Task], bool]] = None,
         cancellation_token: Optional[CancellationToken] = None,
+        persist: bool = False,
     ) -> EvalResults:
         """Convenience method to run with AgentConfigs directly.
 
@@ -200,12 +224,16 @@ class EvalRunner:
             configs: Agent configurations to compare
             task_filter: Optional task filter
             cancellation_token: For cancellation
+            persist: If True, save results to ~/.picoagents/
 
         Returns:
             EvalResults
         """
         targets = [PicoAgentTarget(config) for config in configs]
-        return await self.run(dataset, targets, task_filter, cancellation_token)
+        return await self.run(
+            dataset, targets, task_filter, cancellation_token,
+            persist=persist,
+        )
 
     async def _run_target(
         self,
@@ -245,40 +273,52 @@ class EvalRunner:
     ) -> TaskResult:
         """Run a single task and score it.
 
-        Each task runs in an isolated temp directory so targets don't
-        share filesystem state (e.g., cloned repos from prior runs).
+        When a PicoAgentTarget has no explicit workspace, an isolated temp
+        directory is created per task so targets don't share filesystem
+        state.  When the config already specifies a workspace, it is
+        respected as-is (no temp dir, no mutation).
         """
-        # Create middleware for metrics
         middleware = RunMiddleware()
-
-        # Create isolated workspace per task run
         task_id = task.id or task.name
-        task_workspace = Path(tempfile.mkdtemp(
-            prefix=f"eval_{target.name}_{task_id}_"
-        ))
+
+        # Only create a temp workspace when the target has none set
+        needs_temp = (
+            isinstance(target, PicoAgentTarget)
+            and target.config.workspace is None
+        )
+        task_workspace = None
+        if needs_temp:
+            task_workspace = Path(tempfile.mkdtemp(
+                prefix=f"eval_{target.name}_{task_id}_"
+            ))
 
         try:
-            # Execute task in isolated workspace
             if isinstance(target, PicoAgentTarget):
-                # Override workspace for this run
-                original_workspace = target.config.workspace
-                target.config.workspace = str(task_workspace)
-                try:
-                    trajectory = await target.run(
-                        task,
-                        cancellation_token=cancellation_token,
-                        middlewares=[middleware],
+                if needs_temp:
+                    # Copy config with temp workspace (parallel-safe,
+                    # never mutates the original target)
+                    task_config = copy.copy(target.config)
+                    task_config.workspace = str(task_workspace)
+                    task_target = PicoAgentTarget(
+                        task_config,
+                        middlewares=target.middlewares,
                     )
-                finally:
-                    target.config.workspace = original_workspace
+                else:
+                    task_target = target
+
+                trajectory = await task_target.run(
+                    task,
+                    cancellation_token=cancellation_token,
+                    middlewares=[middleware],
+                )
             else:
                 trajectory = await target.run(
                     task,
                     cancellation_token=cancellation_token,
                 )
         finally:
-            # Clean up temp workspace
-            shutil.rmtree(task_workspace, ignore_errors=True)
+            if task_workspace is not None:
+                shutil.rmtree(task_workspace, ignore_errors=True)
 
         # Score with judge
         criteria = task.eval_criteria or dataset.default_eval_criteria

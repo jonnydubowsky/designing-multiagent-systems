@@ -53,6 +53,9 @@ class AgentConfig:
     workspace: Optional[str] = None  # Root directory for file tools
     bash_timeout: int = 300  # 5 min timeout for bash
 
+    # Custom tool instances (overrides tool categories when set)
+    tool_instances: Optional[List[Any]] = field(default=None, repr=False)
+
     # Additional kwargs passed to agent constructor
     extra_kwargs: Dict[str, Any] = field(default_factory=dict)
 
@@ -154,7 +157,7 @@ class AgentConfig:
                 azure_endpoint=os.environ["AZURE_OPENAI_ENDPOINT"],
                 azure_deployment=os.environ.get("AZURE_OPENAI_DEPLOYMENT", self.model_name),
                 api_key=os.environ["AZURE_OPENAI_API_KEY"],
-                api_version=os.environ.get("AZURE_OPENAI_API_VERSION", "2024-02-15-preview"),
+                api_version=os.environ.get("AZURE_OPENAI_API_VERSION", "2024-10-21"),
                 temperature=temp,
             )
         elif self.model_provider == "anthropic":
@@ -191,7 +194,14 @@ class AgentConfig:
             raise ValueError(f"Unknown compaction strategy: {self.compaction}")
 
     def _create_tools(self):
-        """Create tools based on configuration."""
+        """Create tools based on configuration.
+
+        If ``tool_instances`` is set, those instances are used directly
+        (overrides the ``tools`` category list).
+        """
+        if self.tool_instances is not None:
+            return list(self.tool_instances)
+
         from ..tools import create_coding_tools, create_core_tools
 
         workspace = Path(self.workspace) if self.workspace else None

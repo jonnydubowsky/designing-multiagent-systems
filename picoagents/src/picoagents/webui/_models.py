@@ -12,11 +12,11 @@ class EntityInfo(BaseModel):
     """WebUI-specific: Discovery metadata for entities."""
 
     id: str = Field(description="Unique identifier for the entity")
-    name: Optional[str] = Field(None, description="Human-readable name")
-    description: Optional[str] = Field(None, description="Entity description")
+    name: Optional[str] = Field(default=None, description="Human-readable name")
+    description: Optional[str] = Field(default=None, description="Entity description")
     type: str = Field(description="Entity type (agent, orchestrator, workflow)")
     source: str = Field(description="Source of discovery (directory, memory)")
-    module_path: Optional[str] = Field(None, description="Path to the Python module")
+    module_path: Optional[str] = Field(default=None, description="Path to the Python module")
     tools: List[str] = Field(
         default_factory=list, description="Available tools/functions"
     )
@@ -30,8 +30,8 @@ class AgentInfo(EntityInfo):
     """WebUI-specific: Agent discovery metadata."""
 
     type: str = Field(default="agent", description="Always 'agent'")
-    model: Optional[str] = Field(None, description="LLM model being used")
-    memory_type: Optional[str] = Field(None, description="Type of memory system")
+    model: Optional[str] = Field(default=None, description="LLM model being used")
+    memory_type: Optional[str] = Field(default=None, description="Type of memory system")
 
 
 class OrchestratorInfo(EntityInfo):
@@ -55,9 +55,9 @@ class WorkflowInfo(EntityInfo):
     type: str = Field(default="workflow", description="Always 'workflow'")
     steps: List[str] = Field(default_factory=list, description="Workflow step IDs")
     input_schema: Optional[Dict[str, Any]] = Field(
-        None, description="Input schema definition"
+        default=None, description="Input schema definition"
     )
-    start_step: Optional[str] = Field(None, description="Starting step ID")
+    start_step: Optional[str] = Field(default=None, description="Starting step ID")
 
 
 # Union type for all entity discovery info
@@ -83,7 +83,7 @@ class HealthResponse(BaseModel):
     """WebUI-specific: Health check response."""
 
     status: str = Field(description="Health status")
-    entities_dir: Optional[str] = Field(None, description="Directory being scanned")
+    entities_dir: Optional[str] = Field(default=None, description="Directory being scanned")
     entities_count: int = Field(0, description="Number of discovered entities")
 
 

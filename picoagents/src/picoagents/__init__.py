@@ -52,6 +52,7 @@ from ._hooks import (
     BaseStartHook,
     CompletionCheckHook,
     CompositeTermination,
+    LLMCompletionCheckHook,
     LoopContext,
     MaxRestartsTermination,
     PlanningHook,

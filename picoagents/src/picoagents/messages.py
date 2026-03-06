@@ -120,10 +120,10 @@ class MultiModalMessage(BaseMessage):
         description="MIME type of the content (e.g., 'text/plain', 'image/jpeg', 'audio/wav', 'video/mp4')",
     )
     data: Optional[Union[bytes, str]] = Field(
-        None, description="Binary data (bytes) or base64 string for the content"
+        default=None, description="Binary data (bytes) or base64 string for the content"
     )
     media_url: Optional[str] = Field(
-        None, description="URL to media content if data is not provided"
+        default=None, description="URL to media content if data is not provided"
     )
     metadata: Dict[str, Any] = Field(
         default_factory=dict, description="Additional content metadata"

@@ -87,8 +87,12 @@ class LLMEvalJudge(BaseEvalJudge):
             # Parse the structured response
             score_data = self._parse_llm_response(response_content, eval_criteria)
 
+            # Compute overall as deterministic average of dimensions
+            dim_scores = list(score_data["dimensions"].values())
+            overall = sum(dim_scores) / len(dim_scores) if dim_scores else 0.0
+
             return EvalScore(
-                overall=score_data["overall"],
+                overall=overall,
                 dimensions=score_data["dimensions"],
                 reasoning=score_data["reasoning"],
                 trajectory=trajectory,
@@ -152,8 +156,7 @@ Instructions:
 1. Analyze the task, expected output (if provided), and the complete agent conversation
 2. Consider both the final outcome AND the process (reasoning, communication, error handling)
 3. Score each criterion from 0-10 (0=poor, 5=average, 10=excellent)
-4. Calculate overall score as average of dimensional scores
-5. Provide brief reasoning for each score"""
+4. Provide brief reasoning for each score"""
 
         # Append custom instructions if provided
         if self.custom_instructions:
@@ -163,7 +166,6 @@ Instructions:
 
 Respond with this EXACT JSON format:
 {{
-  "overall": <overall_score>,
   "dimensions": {{
     "{criteria[0]}": <score>,
     {', '.join(f'"{c}": <score>' for c in criteria[1:]) if len(criteria) > 1 else ''}
@@ -285,8 +287,8 @@ Please evaluate this complete conversation according to the specified criteria."
             # Parse the JSON
             parsed = json.loads(response)
 
-            # Validate structure
-            if not all(key in parsed for key in ["overall", "dimensions", "reasoning"]):
+            # Validate structure (overall computed in code, not by LLM)
+            if not all(key in parsed for key in ["dimensions", "reasoning"]):
                 raise ValueError("Missing required keys")
 
             # Ensure all criteria are present
