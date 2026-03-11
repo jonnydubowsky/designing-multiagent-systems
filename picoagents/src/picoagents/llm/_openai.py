@@ -401,30 +401,34 @@ class OpenAIChatCompletionClient(
 
     def _make_schema_compatible(self, schema: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Modify schema to be compatible with OpenAI Structured Outputs requirements.
+        Modify schema to be compatible with OpenAI Structured Outputs.
 
-        Args:
-            schema: The JSON schema to make compatible
-
-        Returns:
-            Modified schema with OpenAI compatibility fixes
+        Handles: $defs/$ref, nested objects, array items, and Optional fields.
+        OpenAI strict mode requires all properties in 'required' and
+        additionalProperties=false on every object.
         """
-        # Make a copy to avoid modifying the original
         compatible_schema = schema.copy()
 
-        # Ensure additionalProperties is False (required by OpenAI)
+        # Process $defs (Pydantic nested models generate these)
+        if "$defs" in compatible_schema:
+            compatible_schema["$defs"] = {
+                name: self._make_schema_compatible(defn)
+                for name, defn in compatible_schema["$defs"].items()
+            }
+
         if compatible_schema.get("type") == "object":
             compatible_schema["additionalProperties"] = False
-
-            # Recursively apply to nested objects
             properties = compatible_schema.get("properties", {})
+
+            # OpenAI requires ALL properties in 'required'
+            compatible_schema["required"] = list(properties.keys())
+
             for prop_name, prop_schema in properties.items():
                 if isinstance(prop_schema, dict):
                     compatible_schema["properties"][
                         prop_name
                     ] = self._make_schema_compatible(prop_schema)
 
-        # Handle arrays with object items
         if compatible_schema.get("type") == "array":
             items = compatible_schema.get("items")
             if isinstance(items, dict):

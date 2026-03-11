@@ -10,8 +10,9 @@ import copy
 import shutil
 import tempfile
 from pathlib import Path
-from typing import Callable, List, Optional, Sequence
+from typing import Callable, List, Optional, Sequence, Union
 
+from ..agents._base import BaseAgent
 from .._cancellation_token import CancellationToken
 from ..types import EvalScore, RunTrajectory, Task, Usage
 from ._base import EvalJudge, Target
@@ -19,7 +20,13 @@ from ._config import AgentConfig
 from ._dataset import Dataset
 from ._middleware import RunMiddleware
 from ._results import EvalResults, TaskResult
-from ._targets import PicoAgentTarget
+from ._targets import AgentEvalTarget, PicoAgentTarget
+
+#: Anything that can be passed to ``EvalRunner.run()`` as a target.
+#: - ``Target``: used as-is
+#: - ``AgentConfig``: wrapped in ``PicoAgentTarget`` (fresh agent per task)
+#: - ``BaseAgent``: wrapped in ``AgentEvalTarget`` (reuses instance)
+Runnable = Union[Target, AgentConfig, BaseAgent]
 
 
 class EvalRunner:
@@ -29,14 +36,14 @@ class EvalRunner:
     - Simple: evaluate(target, tasks) -> List[EvalScore]
     - Full: run(dataset, targets) -> EvalResults
 
+    ``run()`` accepts any mix of Target, AgentConfig, or BaseAgent
+    instances — they are auto-resolved to the appropriate Target wrapper.
+
     Example:
         >>> runner = EvalRunner(judge=my_judge)
         >>> results = await runner.run(
         ...     dataset=my_dataset,
-        ...     targets=[
-        ...         PicoAgentTarget(config_baseline),
-        ...         PicoAgentTarget(config_optimized),
-        ...     ]
+        ...     targets=[agent, config, custom_target],
         ... )
     """
 
@@ -132,10 +139,28 @@ class EvalRunner:
 
     # --- Full mode (dataset + multiple targets -> EvalResults) ---
 
+    @staticmethod
+    def _resolve_target(item: Runnable) -> Target:
+        """Convert a Runnable to a Target.
+
+        - Target: returned as-is
+        - AgentConfig: wrapped in PicoAgentTarget (fresh agent per task)
+        - BaseAgent: wrapped in AgentEvalTarget (reuses instance)
+        """
+        if isinstance(item, Target):
+            return item
+        if isinstance(item, AgentConfig):
+            return PicoAgentTarget(item)
+        if isinstance(item, BaseAgent):
+            return AgentEvalTarget(item)
+        raise TypeError(
+            f"Expected Target, AgentConfig, or BaseAgent, got {type(item).__name__}"
+        )
+
     async def run(
         self,
         dataset: Dataset,
-        targets: Sequence[Target],
+        targets: Sequence[Runnable],
         task_filter: Optional[Callable[[Task], bool]] = None,
         cancellation_token: Optional[CancellationToken] = None,
         persist: bool = False,
@@ -147,7 +172,8 @@ class EvalRunner:
 
         Args:
             dataset: Dataset of tasks to run
-            targets: Targets to evaluate
+            targets: Targets to evaluate — accepts any mix of
+                Target, AgentConfig, or BaseAgent instances
             task_filter: Optional filter to select subset of tasks
             cancellation_token: For cancellation support
             persist: If True, save results to ~/.picoagents/ (DB
@@ -156,6 +182,7 @@ class EvalRunner:
         Returns:
             EvalResults with full results matrix
         """
+        resolved_targets = [self._resolve_target(t) for t in targets]
         tasks = list(dataset.tasks)
         if task_filter:
             tasks = [t for t in tasks if task_filter(t)]
@@ -168,17 +195,17 @@ class EvalRunner:
         if self.parallel_targets:
             target_coros = [
                 self._run_target(target, tasks, dataset, cancellation_token)
-                for target in targets
+                for target in resolved_targets
             ]
             target_results = await asyncio.gather(*target_coros, return_exceptions=True)
 
-            for target, target_result in zip(targets, target_results):
+            for target, target_result in zip(resolved_targets, target_results):
                 if isinstance(target_result, Exception):
                     continue
                 for task_result in target_result:
                     results.add_result(task_result)
         else:
-            for target in targets:
+            for target in resolved_targets:
                 if cancellation_token and cancellation_token.is_cancelled():
                     break
 
@@ -208,32 +235,6 @@ class EvalRunner:
                 )
 
         return results
-
-    async def run_configs(
-        self,
-        dataset: Dataset,
-        configs: List[AgentConfig],
-        task_filter: Optional[Callable[[Task], bool]] = None,
-        cancellation_token: Optional[CancellationToken] = None,
-        persist: bool = False,
-    ) -> EvalResults:
-        """Convenience method to run with AgentConfigs directly.
-
-        Args:
-            dataset: Dataset of tasks
-            configs: Agent configurations to compare
-            task_filter: Optional task filter
-            cancellation_token: For cancellation
-            persist: If True, save results to ~/.picoagents/
-
-        Returns:
-            EvalResults
-        """
-        targets = [PicoAgentTarget(config) for config in configs]
-        return await self.run(
-            dataset, targets, task_filter, cancellation_token,
-            persist=persist,
-        )
 
     async def _run_target(
         self,
@@ -311,6 +312,16 @@ class EvalRunner:
                     cancellation_token=cancellation_token,
                     middlewares=[middleware],
                 )
+            elif isinstance(target, AgentEvalTarget):
+                # Inject middleware for metrics collection
+                target.agent.middleware_chain.add(middleware)
+                try:
+                    trajectory = await target.run(
+                        task,
+                        cancellation_token=cancellation_token,
+                    )
+                finally:
+                    target.agent.middleware_chain.middlewares.remove(middleware)
             else:
                 trajectory = await target.run(
                     task,

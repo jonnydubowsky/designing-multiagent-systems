@@ -20,7 +20,7 @@ and comparing different picoagents components (agents, models, orchestrators).
     >>>
     >>> # Run evaluation
     >>> runner = EvalRunner(judge=LLMEvalJudge(model_client))
-    >>> results = await runner.run_configs(dataset, configs)
+    >>> results = await runner.run(dataset, configs)
     >>>
     >>> # Analyze results
     >>> print_results(results)
@@ -30,7 +30,7 @@ and comparing different picoagents components (agents, models, orchestrators).
 from ._base import EvalJudge, Target
 
 # Runner
-from ._runner import EvalRunner
+from ._runner import EvalRunner, Runnable
 
 # Targets
 from ._targets import (
@@ -85,6 +85,7 @@ __all__ = [
     "EvalJudge",
     # Runner
     "EvalRunner",
+    "Runnable",
     # Targets
     "AgentEvalTarget",
     "ModelEvalTarget",

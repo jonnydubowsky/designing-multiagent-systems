@@ -109,6 +109,9 @@ class ToolMessage(BaseMessage):
     tool_name: str = Field(..., description="Name of the tool that was executed")
     success: bool = Field(..., description="Whether tool execution succeeded")
     error: Optional[str] = Field(default=None, description="Error message if failed")
+    metadata: Dict[str, Any] = Field(
+        default_factory=dict, description="Tool-specific metadata (e.g. sub-agent usage)"
+    )
 
 
 class MultiModalMessage(BaseMessage):

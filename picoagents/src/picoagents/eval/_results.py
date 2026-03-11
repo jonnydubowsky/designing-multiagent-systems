@@ -128,6 +128,8 @@ class TaskResult:
                 msg_dict["success"] = msg.success
             if hasattr(msg, "error") and msg.error:
                 msg_dict["error"] = msg.error
+            if hasattr(msg, "metadata") and msg.metadata:
+                msg_dict["metadata"] = msg.metadata
 
             if hasattr(msg, "usage") and msg.usage:
                 msg_dict["usage"] = {
@@ -445,7 +447,7 @@ def load_eval_results(path: Path) -> EvalResults:
     Returns:
         EvalResults instance with full results
     """
-    from ..messages import AssistantMessage, SystemMessage, ToolMessage, UserMessage
+    from ..messages import AssistantMessage, SystemMessage, ToolCallRequest, ToolMessage, UserMessage
     from ..types import Task, Usage
 
     path = Path(path)
@@ -474,9 +476,32 @@ def load_eval_results(path: Path) -> EvalResults:
             for msg_data in trace.get("messages", []):
                 msg_cls = msg_type_map.get(msg_data.get("type"))
                 if msg_cls and msg_data.get("content") is not None:
-                    kwargs = {"content": msg_data["content"]}
+                    kwargs: Dict[str, Any] = {"content": msg_data["content"]}
                     if msg_data.get("source"):
                         kwargs["source"] = msg_data["source"]
+                    # Reconstruct tool_calls for AssistantMessage
+                    if msg_cls == AssistantMessage and msg_data.get("tool_calls"):
+                        tool_calls = []
+                        for tc in msg_data["tool_calls"]:
+                            try:
+                                tool_calls.append(ToolCallRequest(
+                                    tool_name=tc["tool_name"],
+                                    parameters=tc.get("parameters", {}),
+                                    call_id=tc.get("call_id", ""),
+                                ))
+                            except Exception:
+                                pass
+                        if tool_calls:
+                            kwargs["tool_calls"] = tool_calls
+                    # Reconstruct ToolMessage fields
+                    if msg_cls == ToolMessage:
+                        kwargs["tool_call_id"] = msg_data.get("tool_call_id", "")
+                        kwargs["tool_name"] = msg_data.get("tool_name", "unknown")
+                        kwargs["success"] = msg_data.get("success", True)
+                        if msg_data.get("error"):
+                            kwargs["error"] = msg_data["error"]
+                        if msg_data.get("metadata"):
+                            kwargs["metadata"] = msg_data["metadata"]
                     try:
                         messages.append(msg_cls(**kwargs))
                     except Exception:

@@ -4,14 +4,31 @@ LLM-based evaluation judge.
 This module provides an evaluation judge that uses an LLM to score trajectories.
 """
 
-import json
 from typing import Dict, List, Optional
+
+from pydantic import BaseModel, Field
 
 from ..._cancellation_token import CancellationToken
 from ...llm import BaseChatCompletionClient
 from ...messages import SystemMessage, UserMessage
 from ...types import EvalScore, RunTrajectory
 from ._base import BaseEvalJudge
+
+
+class CriterionScore(BaseModel):
+    """Score for a single evaluation criterion."""
+
+    name: str = Field(description="Criterion name (e.g. 'completeness')")
+    score: float = Field(description="Score from 0 to 10")
+    reasoning: str = Field(description="Brief reasoning for this score")
+
+
+class JudgeResponse(BaseModel):
+    """Structured judge evaluation response."""
+
+    scores: list[CriterionScore] = Field(
+        description="One score entry per evaluation criterion"
+    )
 
 
 class LLMEvalJudge(BaseEvalJudge):
@@ -32,10 +49,7 @@ class LLMEvalJudge(BaseEvalJudge):
             name: Optional custom name (defaults to model name)
             default_criteria: Default evaluation criteria if none specified
             answer_strategy: How to extract answer from trajectory
-                Note: LLM judges often benefit from seeing full context
-            custom_instructions: Optional additional instructions to append to the system prompt
-                Use this to add domain-specific guidance, adjust for multi-agent evaluation,
-                or specify format flexibility requirements
+            custom_instructions: Optional additional instructions for the judge
         """
         super().__init__(
             name or f"LLM-{getattr(client, 'model', 'Judge')}", answer_strategy
@@ -54,24 +68,11 @@ class LLMEvalJudge(BaseEvalJudge):
         criteria: Optional[List[str]] = None,
         cancellation_token: Optional[CancellationToken] = None,
     ) -> EvalScore:
-        """Score an evaluation trajectory using LLM.
-
-        Args:
-            trajectory: The execution trajectory to score
-            criteria: Optional list of evaluation dimensions to score
-            cancellation_token: Optional token to cancel scoring
-
-        Returns:
-            EvalScore with overall and dimensional scores
-        """
-        # Use provided criteria, task-level criteria, or defaults
+        """Score an evaluation trajectory using LLM with structured output."""
         eval_criteria = criteria or trajectory.task.eval_criteria or self.default_criteria
-
-        # Read rubric directly from task (first-class field)
         rubric = trajectory.task.rubric
 
         try:
-            # Build the evaluation prompt
             system_prompt = self._build_system_prompt(eval_criteria, rubric)
             user_prompt = self._build_user_prompt(trajectory)
 
@@ -80,34 +81,51 @@ class LLMEvalJudge(BaseEvalJudge):
                 UserMessage(content=user_prompt, source="user"),
             ]
 
-            # Get LLM response (note: cancellation_token not passed to client as it's not part of the base interface)
-            result = await self.client.create(messages)
-            response_content = result.message.content
+            result = await self.client.create(
+                messages, output_format=JudgeResponse
+            )
 
-            # Parse the structured response
-            score_data = self._parse_llm_response(response_content, eval_criteria)
+            # Extract from structured output (guaranteed valid by API)
+            if result.structured_output:
+                judge_resp: JudgeResponse = result.structured_output
+                dimensions = {s.name: s.score for s in judge_resp.scores}
+                reasoning = {s.name: s.reasoning for s in judge_resp.scores}
+            else:
+                # Fallback: parse from content (for clients without
+                # structured output support)
+                import json
+                import re
 
-            # Compute overall as deterministic average of dimensions
-            dim_scores = list(score_data["dimensions"].values())
+                text = (result.message.content or "").strip()
+                match = re.search(r"\{.*\}", text, re.DOTALL)
+                parsed = json.loads(match.group(0) if match else text)
+                dimensions = parsed.get("dimensions", {})
+                reasoning = parsed.get("reasoning", {})
+
+            # Fill missing criteria with defaults
+            for criterion in eval_criteria:
+                dimensions.setdefault(criterion, 5.0)
+                reasoning.setdefault(criterion, "No reasoning provided")
+
+            dim_scores = list(dimensions.values())
             overall = sum(dim_scores) / len(dim_scores) if dim_scores else 0.0
 
             return EvalScore(
                 overall=overall,
-                dimensions=score_data["dimensions"],
-                reasoning=score_data["reasoning"],
+                dimensions=dimensions,
+                reasoning=reasoning,
                 trajectory=trajectory,
                 metadata={
                     "judge_name": self.name,
                     "model": result.model,
                     "criteria_used": eval_criteria,
-                    "raw_response": response_content,
+                    "raw_response": result.message.content,
                 },
             )
 
         except Exception as e:
-            # Return fallback score on error
             return EvalScore(
-                overall=5.0,  # Neutral score
+                overall=5.0,
                 dimensions={dim: 5.0 for dim in eval_criteria},
                 reasoning={dim: f"Judge error: {str(e)}" for dim in eval_criteria},
                 trajectory=trajectory,
@@ -119,14 +137,7 @@ class LLMEvalJudge(BaseEvalJudge):
             )
 
     def _build_system_prompt(self, criteria: List[str], rubric: Optional[Dict[str, str]] = None) -> str:
-        """Build the system prompt for the evaluation LLM.
-
-        Args:
-            criteria: List of evaluation dimensions to score
-            rubric: Optional rubric from the task - maps criterion name to
-                scoring guidance (e.g. "10: All files reviewed. 5: Most. 0: None.")
-                When provided, rubric descriptions replace the generic defaults.
-        """
+        """Build the system prompt for the evaluation LLM."""
         default_descriptions = {
             "accuracy": "How factually correct and truthful is the response?",
             "completeness": "How thoroughly does the response address the task?",
@@ -138,7 +149,6 @@ class LLMEvalJudge(BaseEvalJudge):
 
         criteria_details = []
         for criterion in criteria:
-            # Rubric takes priority over generic defaults
             if rubric and criterion in rubric:
                 description = rubric[criterion]
             else:
@@ -156,34 +166,16 @@ Instructions:
 1. Analyze the task, expected output (if provided), and the complete agent conversation
 2. Consider both the final outcome AND the process (reasoning, communication, error handling)
 3. Score each criterion from 0-10 (0=poor, 5=average, 10=excellent)
-4. Provide brief reasoning for each score"""
+4. Provide brief reasoning for each score
+5. Return one score entry per criterion listed above, using the exact criterion name"""
 
-        # Append custom instructions if provided
         if self.custom_instructions:
             base_prompt += f"\n\nAdditional Evaluation Guidance:\n{self.custom_instructions}"
-
-        base_prompt += f"""
-
-Respond with this EXACT JSON format:
-{{
-  "dimensions": {{
-    "{criteria[0]}": <score>,
-    {', '.join(f'"{c}": <score>' for c in criteria[1:]) if len(criteria) > 1 else ''}
-  }},
-  "reasoning": {{
-    "{criteria[0]}": "<brief_reason>",
-    {', '.join(f'"{c}": "<brief_reason>"' for c in criteria[1:]) if len(criteria) > 1 else ''}
-  }}
-}}"""
 
         return base_prompt
 
     def _build_user_prompt(self, trajectory: RunTrajectory) -> str:
-        """Build the user prompt containing the trajectory to evaluate.
-
-        Formats each message with explicit role labels and full tool call
-        details so the judge can see exactly what happened.
-        """
+        """Build the user prompt containing the trajectory to evaluate."""
         task_info = f"Task: {trajectory.task.name}\nInput: {trajectory.task.input}"
 
         if trajectory.task.expected_output:
@@ -213,11 +205,7 @@ Complete Agent Conversation:
 Please evaluate this complete conversation according to the specified criteria."""
 
     def _format_message(self, msg) -> str:
-        """Format a single message with role label and full structure.
-
-        Shows tool calls, tool results, and proper role labels so the
-        judge sees exactly what happened in the conversation.
-        """
+        """Format a single message with role label and full structure."""
         role = getattr(msg, "role", "unknown")
         source = getattr(msg, "source", "")
         content = getattr(msg, "content", "")
@@ -233,13 +221,11 @@ Please evaluate this complete conversation according to the specified criteria."
             if content:
                 parts.append(content)
 
-            # Show tool calls with names and parameters
             tool_calls = getattr(msg, "tool_calls", None)
             if tool_calls:
                 for tc in tool_calls:
                     tool_name = getattr(tc, "tool_name", str(tc))
                     params = getattr(tc, "parameters", {})
-                    # Truncate large parameter values for readability
                     param_strs = []
                     for k, v in params.items():
                         v_str = str(v)
@@ -259,7 +245,6 @@ Please evaluate this complete conversation according to the specified criteria."
             header = f"[TOOL RESULT ({tool_name}) - {status}]"
             if error:
                 header += f"\nError: {error}"
-            # Truncate very long tool output for judge readability
             display_content = content
             if len(display_content) > 2000:
                 display_content = display_content[:2000] + "\n... (truncated)"
@@ -267,45 +252,3 @@ Please evaluate this complete conversation according to the specified criteria."
 
         else:
             return f"[{role.upper()} ({source})]\n{content}"
-
-    def _parse_llm_response(self, response: str, criteria: List[str]) -> Dict:
-        """Parse the LLM's structured response."""
-        try:
-            # Try to extract JSON from the response
-            response = response.strip()
-
-            # Find JSON block if wrapped in code blocks
-            if "```json" in response:
-                start = response.find("```json") + 7
-                end = response.find("```", start)
-                response = response[start:end].strip()
-            elif "```" in response:
-                start = response.find("```") + 3
-                end = response.find("```", start)
-                response = response[start:end].strip()
-
-            # Parse the JSON
-            parsed = json.loads(response)
-
-            # Validate structure (overall computed in code, not by LLM)
-            if not all(key in parsed for key in ["dimensions", "reasoning"]):
-                raise ValueError("Missing required keys")
-
-            # Ensure all criteria are present
-            for criterion in criteria:
-                if criterion not in parsed["dimensions"]:
-                    parsed["dimensions"][criterion] = 5.0
-                if criterion not in parsed["reasoning"]:
-                    parsed["reasoning"][criterion] = "No reasoning provided"
-
-            return parsed
-
-        except Exception:
-            # Fallback to neutral scores
-            return {
-                "overall": 5.0,
-                "dimensions": {dim: 5.0 for dim in criteria},
-                "reasoning": {
-                    dim: "Failed to parse judge response" for dim in criteria
-                },
-            }

@@ -352,10 +352,23 @@ class ClaudeCodeTarget(Target):
     async def run(
         self, task: Task, cancellation_token: Optional[CancellationToken] = None
     ) -> RunTrajectory:
+        import os
+        if os.environ.get("CLAUDECODE"):
+            return RunTrajectory(
+                task=task,
+                messages=[],
+                success=False,
+                error=(
+                    "Cannot run ClaudeCodeTarget inside a Claude Code session "
+                    "(CLAUDECODE env var is set). Run from Jupyter or a plain terminal."
+                ),
+                usage=Usage(duration_ms=0, llm_calls=0, tokens_input=0, tokens_output=0),
+            )
+
         try:
-            from claude_agent_sdk import (
+            from claude_code_sdk import (
                 AssistantMessage as CCAssistantMessage,
-                ClaudeAgentOptions,
+                ClaudeCodeOptions,
                 ResultMessage,
                 TextBlock,
                 ToolResultBlock,
@@ -368,14 +381,14 @@ class ClaudeCodeTarget(Target):
                 task=task,
                 messages=[],
                 success=False,
-                error="claude-agent-sdk not installed. Install with: pip install claude-agent-sdk",
+                error="claude-code-sdk not installed. Install with: pip install claude-code-sdk",
                 usage=Usage(duration_ms=0, llm_calls=0, tokens_input=0, tokens_output=0),
             )
 
         from ..messages import AssistantMessage, ToolMessage, UserMessage
         from ..messages import ToolCallRequest
 
-        options = ClaudeAgentOptions(
+        options = ClaudeCodeOptions(
             allowed_tools=self.allowed_tools,
             max_turns=self.max_turns,
         )
@@ -398,6 +411,7 @@ class ClaudeCodeTarget(Target):
         output_tokens = 0
         duration_ms = 0
         total_cost_usd: Optional[float] = None
+        usage_breakdown: Dict[str, Any] = {}
         success = False
         error = None
 
@@ -471,6 +485,11 @@ class ClaudeCodeTarget(Target):
                             + message.usage.get("cache_read_input_tokens", 0)
                         )
                         output_tokens = message.usage.get("output_tokens", 0)
+                        # Preserve the full breakdown for cost analysis
+                        usage_breakdown = {
+                            k: v for k, v in message.usage.items()
+                            if isinstance(v, (int, float))
+                        }
                     if message.is_error:
                         error = message.result or "Claude Code returned error"
 
@@ -483,6 +502,8 @@ class ClaudeCodeTarget(Target):
         }
         if total_cost_usd is not None:
             metadata["total_cost_usd"] = total_cost_usd
+        if usage_breakdown:
+            metadata["usage_breakdown"] = usage_breakdown
 
         return RunTrajectory(
             task=task,

@@ -1006,6 +1006,7 @@ class Agent(Component[AgentConfig], BaseAgent):
                             tool_name=tool_call.tool_name,
                             success=item.success,
                             error=item.error,
+                            metadata=item.metadata,
                         )
                         # Add to context and messages
                         working_context.add_message(result)
@@ -1067,6 +1068,7 @@ class Agent(Component[AgentConfig], BaseAgent):
                     tool_name=tool_call.tool_name,
                     success=tool_result.success,
                     error=tool_result.error,
+                    metadata=tool_result.metadata,
                 )
 
                 # Emit tool response event
