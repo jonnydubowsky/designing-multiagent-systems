@@ -25,6 +25,10 @@ import sys
 import time
 from pathlib import Path
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from picoagents.workflow import (
     FunctionStep,
     StepMetadata,
@@ -113,14 +117,19 @@ async def main():
     )
     args = parser.parse_args()
 
-    # Check environment
-    if not os.getenv("AZURE_OPENAI_ENDPOINT"):
+    # Check environment - prefer Anthropic, fall back to Azure
+    use_anthropic = bool(os.getenv("ANTHROPIC_API_KEY"))
+    use_azure = bool(os.getenv("AZURE_OPENAI_ENDPOINT"))
+
+    if not use_anthropic and not use_azure:
         print(
-            "❌ Set AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_API_KEY environment variables"
+            "❌ Set ANTHROPIC_API_KEY or AZURE_OPENAI_ENDPOINT + AZURE_OPENAI_API_KEY"
         )
         return
 
     print("🚀 YC Agent Analysis Workflow")
+    if use_anthropic:
+        print("🤖 Using Anthropic Claude for classification")
     if args.sample:
         print(f"🧪 Sample mode: {args.sample} companies")
     print("=" * 40)
@@ -129,6 +138,8 @@ async def main():
     config = WorkflowConfig(
         data_dir="./data",
         azure_deployment="gpt-4.1-mini",
+        anthropic_model="claude-sonnet-4-5",
+        use_anthropic=use_anthropic,
         batch_size=5,  # Start with smaller batches for testing
         sample_size=args.sample,  # Pass sample size for testing
     )

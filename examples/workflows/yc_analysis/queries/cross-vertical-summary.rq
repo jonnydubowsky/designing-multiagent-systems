@@ -1,0 +1,32 @@
+# Cross-Vertical Summary — AI Agent vertical overview for cross-vertical report
+# Schedule: Weekly (feeds into cross-vertical comparison)
+# Intent: Produce a single-query summary that can be joined with micro-drama
+# summary to create the weekly cross-vertical intelligence report.
+
+PREFIX asbpi: <https://shurai.com/ontology/ai-agent-sbpi#>
+PREFIX rdfs:  <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX xsd:   <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+    ("AI Agents" AS ?vertical)
+    (COUNT(DISTINCT ?c) AS ?totalCompanies)
+    (SUM(IF(?isAgent, 1, 0)) AS ?coreEntityCount)
+    (AVG(?composite) AS ?avgScore)
+    (MAX(?composite) AS ?topScore)
+    (MIN(?composite) AS ?bottomScore)
+    (SUM(IF(?composite >= 85, 1, 0)) AS ?dominant)
+    (SUM(IF(?composite >= 70 && ?composite < 85, 1, 0)) AS ?strong)
+    (SUM(IF(?composite >= 55 && ?composite < 70, 1, 0)) AS ?emerging)
+    (SUM(IF(?composite >= 40 && ?composite < 55, 1, 0)) AS ?niche)
+    (SUM(IF(?composite < 40, 1, 0)) AS ?limited)
+WHERE {
+    ?sr a asbpi:ScoreRecord ;
+        asbpi:forCompany ?c ;
+        asbpi:compositeScore ?composite .
+    ?c asbpi:isAgent ?isAgent ;
+       asbpi:isAboutAI true .
+
+    # Latest week only
+    ?sr asbpi:forWeek ?w .
+    FILTER NOT EXISTS { ?w2 asbpi:previousWeek ?w . }
+}

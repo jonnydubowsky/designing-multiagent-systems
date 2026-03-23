@@ -1,0 +1,35 @@
+# Attestation Coverage — Which scores have source backing?
+# Schedule: Weekly (governance check)
+# Intent: Identify scores lacking primary data attestation.
+# Automated inference scores need signal upgrades to primary data.
+
+PREFIX asbpi: <https://shurai.com/ontology/ai-agent-sbpi#>
+PREFIX prov:  <http://www.w3.org/ns/prov#>
+PREFIX xsd:   <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?name ?week ?composite ?attType ?confidence ?hasURL ?coverage
+WHERE {
+    ?sr a asbpi:ScoreRecord ;
+        asbpi:forCompany ?c ;
+        asbpi:forWeek ?w ;
+        asbpi:compositeScore ?composite ;
+        asbpi:hasAttestation ?att .
+
+    ?c asbpi:companyName ?name .
+    ?w asbpi:weekLabel ?week .
+
+    ?att asbpi:sourceType ?attType ;
+         asbpi:confidence ?confidence .
+
+    # Check for signal URL presence
+    OPTIONAL {
+        ?sr asbpi:hasSignal ?sig .
+        ?sig asbpi:signalURL ?url .
+    }
+
+    BIND(BOUND(?url) AS ?hasURL)
+    BIND(IF(?hasURL && ?confidence > 0.7, "STRONG",
+         IF(?hasURL, "MODERATE",
+         IF(?confidence > 0.7, "JUDGMENT-ONLY", "WEAK"))) AS ?coverage)
+}
+ORDER BY ?coverage ?name

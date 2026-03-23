@@ -1,0 +1,70 @@
+# Agent vs Tool — Comparing true agents against AI tools
+# Schedule: Weekly (unique to AI agent vertical)
+# Intent: The defining question of the vertical — which companies build
+# genuine autonomous agents vs. AI-powered tools? Compare distributions.
+
+PREFIX asbpi: <https://shurai.com/ontology/ai-agent-sbpi#>
+PREFIX rdfs:  <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX xsd:   <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?category ?count ?avgComposite ?avgMC ?avgMT ?avgPE ?avgAD ?avgCD
+WHERE {
+    {
+        SELECT ("True Agents" AS ?category)
+               (COUNT(?c) AS ?count)
+               (AVG(?composite) AS ?avgComposite)
+               (AVG(?mc) AS ?avgMC)
+               (AVG(?mt) AS ?avgMT)
+               (AVG(?pe) AS ?avgPE)
+               (AVG(?ad) AS ?avgAD)
+               (AVG(?cd) AS ?avgCD)
+        WHERE {
+            ?sr a asbpi:ScoreRecord ;
+                asbpi:forCompany ?c ;
+                asbpi:compositeScore ?composite ;
+                asbpi:hasDimensionScore ?ds_mc ;
+                asbpi:hasDimensionScore ?ds_mt ;
+                asbpi:hasDimensionScore ?ds_pe ;
+                asbpi:hasDimensionScore ?ds_ad ;
+                asbpi:hasDimensionScore ?ds_cd .
+            ?c asbpi:isAgent true .
+            ?ds_mc asbpi:forDimension asbpi:ModelCapability ; asbpi:dimensionValue ?mc .
+            ?ds_mt asbpi:forDimension asbpi:MarketTraction ; asbpi:dimensionValue ?mt .
+            ?ds_pe asbpi:forDimension asbpi:PlatformEcosystem ; asbpi:dimensionValue ?pe .
+            ?ds_ad asbpi:forDimension asbpi:AutonomyDepth ; asbpi:dimensionValue ?ad .
+            ?ds_cd asbpi:forDimension asbpi:CapitalDefensibility ; asbpi:dimensionValue ?cd .
+            ?sr asbpi:forWeek ?w .
+            FILTER NOT EXISTS { ?w2 asbpi:previousWeek ?w . }
+        }
+    }
+    UNION
+    {
+        SELECT ("AI Tools" AS ?category)
+               (COUNT(?c) AS ?count)
+               (AVG(?composite) AS ?avgComposite)
+               (AVG(?mc) AS ?avgMC)
+               (AVG(?mt) AS ?avgMT)
+               (AVG(?pe) AS ?avgPE)
+               (AVG(?ad) AS ?avgAD)
+               (AVG(?cd) AS ?avgCD)
+        WHERE {
+            ?sr a asbpi:ScoreRecord ;
+                asbpi:forCompany ?c ;
+                asbpi:compositeScore ?composite ;
+                asbpi:hasDimensionScore ?ds_mc ;
+                asbpi:hasDimensionScore ?ds_mt ;
+                asbpi:hasDimensionScore ?ds_pe ;
+                asbpi:hasDimensionScore ?ds_ad ;
+                asbpi:hasDimensionScore ?ds_cd .
+            ?c asbpi:isAgent false ;
+               asbpi:isAboutAI true .
+            ?ds_mc asbpi:forDimension asbpi:ModelCapability ; asbpi:dimensionValue ?mc .
+            ?ds_mt asbpi:forDimension asbpi:MarketTraction ; asbpi:dimensionValue ?mt .
+            ?ds_pe asbpi:forDimension asbpi:PlatformEcosystem ; asbpi:dimensionValue ?pe .
+            ?ds_ad asbpi:forDimension asbpi:AutonomyDepth ; asbpi:dimensionValue ?ad .
+            ?ds_cd asbpi:forDimension asbpi:CapitalDefensibility ; asbpi:dimensionValue ?cd .
+            ?sr asbpi:forWeek ?w .
+            FILTER NOT EXISTS { ?w2 asbpi:previousWeek ?w . }
+        }
+    }
+}

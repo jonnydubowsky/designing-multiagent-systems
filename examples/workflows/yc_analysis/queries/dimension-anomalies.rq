@@ -1,0 +1,42 @@
+# Dimension Anomalies — Companies with large gaps between dimensions
+# Schedule: Nightly (surfaces structural imbalances)
+# Intent: Detect AI agent companies where one dimension is dramatically
+# stronger or weaker than others — indicates vulnerability or hidden strength
+# E.g., high Model Capability but low Market Traction = great tech, no customers
+
+PREFIX asbpi: <https://shurai.com/ontology/ai-agent-sbpi#>
+PREFIX rdfs:  <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX xsd:   <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?name ?domain ?dimLabel ?dimValue ?composite ?gap ?interpretation
+WHERE {
+    ?sr a asbpi:ScoreRecord ;
+        asbpi:forCompany ?c ;
+        asbpi:compositeScore ?composite ;
+        asbpi:hasDimensionScore ?ds .
+
+    ?c asbpi:companyName ?name ;
+       asbpi:inDomain ?d .
+    ?d rdfs:label ?domain .
+    ?ds asbpi:forDimension ?dim ;
+        asbpi:dimensionValue ?dimValue .
+    ?dim rdfs:label ?dimLabel .
+
+    # Get latest week
+    ?sr asbpi:forWeek ?w .
+    FILTER NOT EXISTS {
+        ?w2 asbpi:previousWeek ?w .
+    }
+
+    # Calculate gap between dimension and composite
+    BIND((?dimValue - ?composite) AS ?gap)
+
+    # Flag significant gaps (>15 points above or below composite)
+    FILTER(ABS(?gap) > 15)
+
+    BIND(IF(?gap > 0,
+        "HIDDEN STRENGTH — dimension significantly above composite",
+        "VULNERABILITY — dimension significantly below composite"
+    ) AS ?interpretation)
+}
+ORDER BY ?name DESC(ABS(?gap))

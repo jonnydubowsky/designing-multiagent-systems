@@ -1,0 +1,39 @@
+# Domain Stack Rank — Top companies per domain category
+# Schedule: Weekly (core stack ranking output)
+# Intent: Produce the domain-segmented leaderboard for editorial digests.
+# Each domain gets its own ranking, enabling cross-domain comparison.
+
+PREFIX asbpi: <https://shurai.com/ontology/ai-agent-sbpi#>
+PREFIX rdfs:  <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX xsd:   <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?domain ?rank ?name ?composite ?tier ?isAgent
+       ?mc ?mt ?pe ?ad ?cd
+WHERE {
+    ?sr a asbpi:ScoreRecord ;
+        asbpi:forCompany ?c ;
+        asbpi:compositeScore ?composite ;
+        asbpi:inTier ?t ;
+        asbpi:hasDimensionScore ?ds_mc ;
+        asbpi:hasDimensionScore ?ds_mt ;
+        asbpi:hasDimensionScore ?ds_pe ;
+        asbpi:hasDimensionScore ?ds_ad ;
+        asbpi:hasDimensionScore ?ds_cd .
+
+    ?c asbpi:companyName ?name ;
+       asbpi:isAgent ?isAgent ;
+       asbpi:inDomain ?d .
+    ?d rdfs:label ?domain .
+    ?t rdfs:label ?tier .
+
+    ?ds_mc asbpi:forDimension asbpi:ModelCapability ; asbpi:dimensionValue ?mc .
+    ?ds_mt asbpi:forDimension asbpi:MarketTraction ; asbpi:dimensionValue ?mt .
+    ?ds_pe asbpi:forDimension asbpi:PlatformEcosystem ; asbpi:dimensionValue ?pe .
+    ?ds_ad asbpi:forDimension asbpi:AutonomyDepth ; asbpi:dimensionValue ?ad .
+    ?ds_cd asbpi:forDimension asbpi:CapitalDefensibility ; asbpi:dimensionValue ?cd .
+
+    # Get latest week
+    ?sr asbpi:forWeek ?w .
+    FILTER NOT EXISTS { ?w2 asbpi:previousWeek ?w . }
+}
+ORDER BY ?domain DESC(?composite)

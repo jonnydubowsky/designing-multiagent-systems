@@ -1,0 +1,43 @@
+# Autonomy Spectrum — Distribution of autonomy depth across the vertical
+# Schedule: Weekly (unique to AI agent vertical)
+# Intent: Map the autonomy landscape. Most "AI agent" companies are actually
+# AI tools. This query reveals the true distribution of autonomous capability.
+
+PREFIX asbpi: <https://shurai.com/ontology/ai-agent-sbpi#>
+PREFIX rdfs:  <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX xsd:   <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?autonomyBand ?count ?names ?avgComposite
+WHERE {
+    {
+        SELECT ?autonomyBand (COUNT(?c) AS ?count)
+               (GROUP_CONCAT(?name; separator=", ") AS ?names)
+               (AVG(?composite) AS ?avgComposite)
+        WHERE {
+            ?sr a asbpi:ScoreRecord ;
+                asbpi:forCompany ?c ;
+                asbpi:compositeScore ?composite ;
+                asbpi:hasDimensionScore ?ds_ad .
+
+            ?c asbpi:companyName ?name ;
+               asbpi:isAgent true .
+
+            ?ds_ad asbpi:forDimension asbpi:AutonomyDepth ;
+                   asbpi:dimensionValue ?ad .
+
+            ?sr asbpi:forWeek ?w .
+            FILTER NOT EXISTS { ?w2 asbpi:previousWeek ?w . }
+
+            BIND(
+                IF(?ad >= 90, "Full Autonomy (90-100)",
+                IF(?ad >= 70, "Semi-Autonomous (70-89)",
+                IF(?ad >= 50, "Assisted Workflow (50-69)",
+                IF(?ad >= 30, "Human-in-Loop (30-49)",
+                "Generation Only (0-29)"))))
+                AS ?autonomyBand
+            )
+        }
+        GROUP BY ?autonomyBand
+    }
+}
+ORDER BY DESC(?avgComposite)

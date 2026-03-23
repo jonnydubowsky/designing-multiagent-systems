@@ -1,0 +1,405 @@
+@prefix rdf:     <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:    <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:     <http://www.w3.org/2002/07/owl#> .
+@prefix xsd:     <http://www.w3.org/2001/XMLSchema#> .
+@prefix skos:    <http://www.w3.org/2004/02/skos/core#> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix prov:    <http://www.w3.org/ns/prov#> .
+@prefix asbpi:   <https://shurai.com/ontology/ai-agent-sbpi#> .
+
+# =============================================================================
+# AI Agent SBPI Ontology
+# Structural Brand Power Index for AI Agent Companies
+# Parallel to sbpi.ttl (micro-drama vertical)
+# =============================================================================
+
+<https://shurai.com/ontology/ai-agent-sbpi>
+    a owl:Ontology ;
+    rdfs:label "AI Agent SBPI Ontology"@en ;
+    dcterms:description "Structural Brand Power Index scoring methodology for AI agent companies. Tracks competitive positioning across 5 dimensions with weekly cadence."@en ;
+    dcterms:creator "ShurAI"@en ;
+    dcterms:created "2026-03-22"^^xsd:date ;
+    owl:versionInfo "0.1.0" .
+
+# =============================================================================
+# Core Classes
+# =============================================================================
+
+asbpi:AgentCompany a owl:Class ;
+    rdfs:label "Agent Company"@en ;
+    skos:definition "A YC-backed company operating in the AI agent space."@en .
+
+asbpi:Vertical a owl:Class ;
+    rdfs:label "Vertical"@en ;
+    skos:definition "Industry vertical for competitive analysis."@en .
+
+asbpi:Week a owl:Class ;
+    rdfs:label "Week"@en ;
+    skos:definition "A reporting period identified by week number and year."@en .
+
+asbpi:ScoreRecord a owl:Class ;
+    rdfs:subClassOf prov:Entity ;
+    rdfs:label "Score Record"@en ;
+    skos:definition "A single SBPI scoring event linking company, week, dimension scores, and composite."@en .
+
+asbpi:Dimension a owl:Class ;
+    rdfs:label "Dimension"@en ;
+    skos:definition "One of five SBPI scoring dimensions."@en .
+
+asbpi:DimensionScore a owl:Class ;
+    rdfs:label "Dimension Score"@en ;
+    skos:definition "Score value for a single dimension within a ScoreRecord."@en .
+
+asbpi:Tier a owl:Class ;
+    rdfs:label "Tier"@en ;
+    skos:definition "Performance band for competitive positioning."@en .
+
+asbpi:Signal a owl:Class ;
+    rdfs:subClassOf prov:Entity ;
+    rdfs:label "Signal"@en ;
+    skos:definition "Market event, funding round, product launch, or other intelligence signal."@en .
+
+asbpi:Attestation a owl:Class ;
+    rdfs:subClassOf prov:Activity ;
+    rdfs:label "Attestation"@en ;
+    skos:definition "Provenance record linking score to source, methodology, and confidence."@en .
+
+asbpi:Annotation a owl:Class ;
+    rdfs:label "Annotation"@en ;
+    skos:definition "Semantic annotation adding context, intent, or prediction to a score record."@en .
+
+asbpi:Prediction a owl:Class ;
+    rdfs:subClassOf asbpi:Annotation ;
+    rdfs:label "Prediction"@en ;
+    skos:definition "Forward-looking signal derived from historical pattern analysis."@en .
+
+asbpi:DomainCategory a owl:Class ;
+    rdfs:label "Domain Category"@en ;
+    skos:definition "Industry domain for an AI agent company (health, finance, productivity, etc.)."@en .
+
+asbpi:YCBatch a owl:Class ;
+    rdfs:label "YC Batch"@en ;
+    skos:definition "Y Combinator batch identifier (e.g., W24, S23)."@en .
+
+# =============================================================================
+# Dimension Instances
+# =============================================================================
+
+asbpi:ModelCapability a asbpi:Dimension ;
+    rdfs:label "Model Capability"@en ;
+    asbpi:weight 0.20 ;
+    asbpi:dimensionCode "mc" ;
+    skos:definition "Quality, performance, and differentiation of core AI/ML technology."@en .
+
+asbpi:MarketTraction a asbpi:Dimension ;
+    rdfs:label "Market Traction"@en ;
+    asbpi:weight 0.25 ;
+    asbpi:dimensionCode "mt" ;
+    skos:definition "Revenue, user base, growth rate, and real-world deployment evidence."@en .
+
+asbpi:PlatformEcosystem a asbpi:Dimension ;
+    rdfs:label "Platform Ecosystem"@en ;
+    asbpi:weight 0.20 ;
+    asbpi:dimensionCode "pe" ;
+    skos:definition "Developer tools, integrations, API surface, and partner network."@en .
+
+asbpi:AutonomyDepth a asbpi:Dimension ;
+    rdfs:label "Autonomy Depth"@en ;
+    asbpi:weight 0.20 ;
+    asbpi:dimensionCode "ad" ;
+    skos:definition "Degree of genuine agent autonomy — acts independently vs. generates output."@en .
+
+asbpi:CapitalDefensibility a asbpi:Dimension ;
+    rdfs:label "Capital & Defensibility"@en ;
+    asbpi:weight 0.15 ;
+    asbpi:dimensionCode "cd" ;
+    skos:definition "Funding, IP moats, regulatory positioning, and competitive barriers."@en .
+
+# =============================================================================
+# Tier Instances
+# =============================================================================
+
+asbpi:TierDominant a asbpi:Tier ;
+    rdfs:label "Dominant"@en ;
+    asbpi:tierFloor 85 ;
+    asbpi:tierCeiling 100 ;
+    skos:definition "Market leaders with clear competitive advantages across all dimensions."@en .
+
+asbpi:TierStrong a asbpi:Tier ;
+    rdfs:label "Strong"@en ;
+    asbpi:tierFloor 70 ;
+    asbpi:tierCeiling 84 ;
+    skos:definition "Established players with proven traction and defensible positions."@en .
+
+asbpi:TierEmerging a asbpi:Tier ;
+    rdfs:label "Emerging"@en ;
+    asbpi:tierFloor 55 ;
+    asbpi:tierCeiling 69 ;
+    skos:definition "Growing companies with promising technology and early traction."@en .
+
+asbpi:TierNiche a asbpi:Tier ;
+    rdfs:label "Niche"@en ;
+    asbpi:tierFloor 40 ;
+    asbpi:tierCeiling 54 ;
+    skos:definition "Specialized players with limited market presence or narrow focus."@en .
+
+asbpi:TierLimited a asbpi:Tier ;
+    rdfs:label "Limited"@en ;
+    asbpi:tierFloor 0 ;
+    asbpi:tierCeiling 39 ;
+    skos:definition "Early stage, pre-product, or declining companies."@en .
+
+# =============================================================================
+# Vertical Instance
+# =============================================================================
+
+asbpi:AIAgentVertical a asbpi:Vertical ;
+    rdfs:label "AI Agent Companies"@en ;
+    skos:definition "Y Combinator-backed companies building AI agent technology."@en .
+
+# =============================================================================
+# Domain Category Instances
+# =============================================================================
+
+asbpi:DomainHealth a asbpi:DomainCategory ;
+    rdfs:label "Health"@en .
+asbpi:DomainFinance a asbpi:DomainCategory ;
+    rdfs:label "Finance"@en .
+asbpi:DomainLegal a asbpi:DomainCategory ;
+    rdfs:label "Legal"@en .
+asbpi:DomainGovernment a asbpi:DomainCategory ;
+    rdfs:label "Government"@en .
+asbpi:DomainEducation a asbpi:DomainCategory ;
+    rdfs:label "Education"@en .
+asbpi:DomainProductivity a asbpi:DomainCategory ;
+    rdfs:label "Productivity"@en .
+asbpi:DomainSoftware a asbpi:DomainCategory ;
+    rdfs:label "Software"@en .
+asbpi:DomainEcommerce a asbpi:DomainCategory ;
+    rdfs:label "E-Commerce"@en .
+asbpi:DomainMedia a asbpi:DomainCategory ;
+    rdfs:label "Media"@en .
+asbpi:DomainRealEstate a asbpi:DomainCategory ;
+    rdfs:label "Real Estate"@en .
+asbpi:DomainTransportation a asbpi:DomainCategory ;
+    rdfs:label "Transportation"@en .
+asbpi:DomainOther a asbpi:DomainCategory ;
+    rdfs:label "Other"@en .
+
+# =============================================================================
+# Object Properties
+# =============================================================================
+
+asbpi:forCompany a owl:ObjectProperty ;
+    rdfs:domain asbpi:ScoreRecord ;
+    rdfs:range asbpi:AgentCompany ;
+    rdfs:label "for company"@en .
+
+asbpi:forWeek a owl:ObjectProperty ;
+    rdfs:domain asbpi:ScoreRecord ;
+    rdfs:range asbpi:Week ;
+    rdfs:label "for week"@en .
+
+asbpi:inTier a owl:ObjectProperty ;
+    rdfs:domain asbpi:ScoreRecord ;
+    rdfs:range asbpi:Tier ;
+    rdfs:label "in tier"@en .
+
+asbpi:hasDimensionScore a owl:ObjectProperty ;
+    rdfs:domain asbpi:ScoreRecord ;
+    rdfs:range asbpi:DimensionScore ;
+    rdfs:label "has dimension score"@en .
+
+asbpi:forDimension a owl:ObjectProperty ;
+    rdfs:domain asbpi:DimensionScore ;
+    rdfs:range asbpi:Dimension ;
+    rdfs:label "for dimension"@en .
+
+asbpi:inDomain a owl:ObjectProperty ;
+    rdfs:domain asbpi:AgentCompany ;
+    rdfs:range asbpi:DomainCategory ;
+    rdfs:label "in domain"@en .
+
+asbpi:inVertical a owl:ObjectProperty ;
+    rdfs:domain asbpi:AgentCompany ;
+    rdfs:range asbpi:Vertical ;
+    rdfs:label "in vertical"@en .
+
+asbpi:hasAttestation a owl:ObjectProperty ;
+    rdfs:domain asbpi:ScoreRecord ;
+    rdfs:range asbpi:Attestation ;
+    rdfs:label "has attestation"@en .
+
+asbpi:hasAnnotation a owl:ObjectProperty ;
+    rdfs:domain asbpi:ScoreRecord ;
+    rdfs:range asbpi:Annotation ;
+    rdfs:label "has annotation"@en .
+
+asbpi:hasSignal a owl:ObjectProperty ;
+    rdfs:domain asbpi:ScoreRecord ;
+    rdfs:range asbpi:Signal ;
+    rdfs:label "has signal"@en .
+
+asbpi:previousWeek a owl:ObjectProperty ;
+    rdfs:domain asbpi:Week ;
+    rdfs:range asbpi:Week ;
+    rdfs:label "previous week"@en .
+
+asbpi:fromBatch a owl:ObjectProperty ;
+    rdfs:domain asbpi:AgentCompany ;
+    rdfs:range asbpi:YCBatch ;
+    rdfs:label "from YC batch"@en .
+
+asbpi:predictionTarget a owl:ObjectProperty ;
+    rdfs:domain asbpi:Prediction ;
+    rdfs:range asbpi:AgentCompany ;
+    rdfs:label "prediction target"@en .
+
+# =============================================================================
+# Datatype Properties
+# =============================================================================
+
+asbpi:companyName a owl:DatatypeProperty ;
+    rdfs:domain asbpi:AgentCompany ;
+    rdfs:range xsd:string ;
+    rdfs:label "company name"@en .
+
+asbpi:slug a owl:DatatypeProperty ;
+    rdfs:domain asbpi:AgentCompany ;
+    rdfs:range xsd:string ;
+    rdfs:label "URL-safe slug"@en .
+
+asbpi:oneLiner a owl:DatatypeProperty ;
+    rdfs:domain asbpi:AgentCompany ;
+    rdfs:range xsd:string ;
+    rdfs:label "one-liner description"@en .
+
+asbpi:isAgent a owl:DatatypeProperty ;
+    rdfs:domain asbpi:AgentCompany ;
+    rdfs:range xsd:boolean ;
+    rdfs:label "builds autonomous agents"@en .
+
+asbpi:isAboutAI a owl:DatatypeProperty ;
+    rdfs:domain asbpi:AgentCompany ;
+    rdfs:range xsd:boolean ;
+    rdfs:label "actually about AI/ML"@en .
+
+asbpi:ycId a owl:DatatypeProperty ;
+    rdfs:domain asbpi:AgentCompany ;
+    rdfs:range xsd:string ;
+    rdfs:label "YC company ID"@en .
+
+asbpi:website a owl:DatatypeProperty ;
+    rdfs:domain asbpi:AgentCompany ;
+    rdfs:range xsd:anyURI ;
+    rdfs:label "company website"@en .
+
+asbpi:launchedAt a owl:DatatypeProperty ;
+    rdfs:domain asbpi:AgentCompany ;
+    rdfs:range xsd:date ;
+    rdfs:label "launch date"@en .
+
+asbpi:compositeScore a owl:DatatypeProperty ;
+    rdfs:domain asbpi:ScoreRecord ;
+    rdfs:range xsd:decimal ;
+    rdfs:label "composite score (0-100)"@en .
+
+asbpi:delta a owl:DatatypeProperty ;
+    rdfs:domain asbpi:ScoreRecord ;
+    rdfs:range xsd:decimal ;
+    rdfs:label "week-over-week delta"@en .
+
+asbpi:dimensionValue a owl:DatatypeProperty ;
+    rdfs:domain asbpi:DimensionScore ;
+    rdfs:range xsd:integer ;
+    rdfs:label "dimension score value (0-100)"@en .
+
+asbpi:weight a owl:DatatypeProperty ;
+    rdfs:domain asbpi:Dimension ;
+    rdfs:range xsd:decimal ;
+    rdfs:label "dimension weight in composite"@en .
+
+asbpi:dimensionCode a owl:DatatypeProperty ;
+    rdfs:domain asbpi:Dimension ;
+    rdfs:range xsd:string ;
+    rdfs:label "short code for dimension"@en .
+
+asbpi:tierFloor a owl:DatatypeProperty ;
+    rdfs:domain asbpi:Tier ;
+    rdfs:range xsd:integer ;
+    rdfs:label "tier floor score"@en .
+
+asbpi:tierCeiling a owl:DatatypeProperty ;
+    rdfs:domain asbpi:Tier ;
+    rdfs:range xsd:integer ;
+    rdfs:label "tier ceiling score"@en .
+
+asbpi:weekLabel a owl:DatatypeProperty ;
+    rdfs:domain asbpi:Week ;
+    rdfs:range xsd:string ;
+    rdfs:label "week label (W{N}-{YYYY})"@en .
+
+asbpi:confidence a owl:DatatypeProperty ;
+    rdfs:domain asbpi:Attestation ;
+    rdfs:range xsd:decimal ;
+    rdfs:label "confidence score (0.0-1.0)"@en .
+
+asbpi:sourceType a owl:DatatypeProperty ;
+    rdfs:domain asbpi:Attestation ;
+    rdfs:range xsd:string ;
+    rdfs:label "source type"@en .
+
+asbpi:signalText a owl:DatatypeProperty ;
+    rdfs:domain asbpi:Signal ;
+    rdfs:range xsd:string ;
+    rdfs:label "signal description"@en .
+
+asbpi:signalURL a owl:DatatypeProperty ;
+    rdfs:domain asbpi:Signal ;
+    rdfs:range xsd:anyURI ;
+    rdfs:label "signal source URL"@en .
+
+asbpi:annotationText a owl:DatatypeProperty ;
+    rdfs:domain asbpi:Annotation ;
+    rdfs:range xsd:string ;
+    rdfs:label "annotation text"@en .
+
+asbpi:intentLayer a owl:DatatypeProperty ;
+    rdfs:domain asbpi:Annotation ;
+    rdfs:range xsd:string ;
+    rdfs:label "intent layer (strategic/tactical/observational/predictive)"@en .
+
+asbpi:predictionDirection a owl:DatatypeProperty ;
+    rdfs:domain asbpi:Prediction ;
+    rdfs:range xsd:string ;
+    rdfs:label "predicted direction (up/down/stable/volatile)"@en .
+
+asbpi:predictionConfidence a owl:DatatypeProperty ;
+    rdfs:domain asbpi:Prediction ;
+    rdfs:range xsd:decimal ;
+    rdfs:label "prediction confidence (0.0-0.95)"@en .
+
+asbpi:aiRationale a owl:DatatypeProperty ;
+    rdfs:domain asbpi:AgentCompany ;
+    rdfs:range xsd:string ;
+    rdfs:label "rationale for AI classification"@en .
+
+asbpi:agentRationale a owl:DatatypeProperty ;
+    rdfs:domain asbpi:AgentCompany ;
+    rdfs:range xsd:string ;
+    rdfs:label "rationale for agent classification"@en .
+
+asbpi:subdomain a owl:DatatypeProperty ;
+    rdfs:domain asbpi:AgentCompany ;
+    rdfs:range xsd:string ;
+    rdfs:label "fine-grained subdomain"@en .
+
+asbpi:batchLabel a owl:DatatypeProperty ;
+    rdfs:domain asbpi:YCBatch ;
+    rdfs:range xsd:string ;
+    rdfs:label "YC batch label (e.g., W24, S23)"@en .
+
+asbpi:scoringRationale a owl:DatatypeProperty ;
+    rdfs:domain asbpi:ScoreRecord ;
+    rdfs:range xsd:string ;
+    rdfs:label "scoring rationale"@en .

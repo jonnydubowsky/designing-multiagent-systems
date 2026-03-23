@@ -1,0 +1,39 @@
+# Cross-Correlation — Dimension co-movement patterns in AI agent vertical
+# Schedule: Weekly (surfaces structural patterns)
+# Intent: Find which AI agent dimensions tend to co-vary.
+# High Model Capability but low Autonomy Depth = great tech, no agent architecture.
+# High Platform Ecosystem but low Market Traction = developer love, no customers.
+
+PREFIX asbpi: <https://shurai.com/ontology/ai-agent-sbpi#>
+PREFIX rdfs:  <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX xsd:   <http://www.w3.org/2001/XMLSchema#>
+
+# Pattern 1: High Model Capability, Low Autonomy = Tech without agency
+SELECT ?name ?domain ?mc ?ad ?composite ?interpretation
+WHERE {
+    ?sr a asbpi:ScoreRecord ;
+        asbpi:forCompany ?c ;
+        asbpi:compositeScore ?composite ;
+        asbpi:hasDimensionScore ?ds_mc ;
+        asbpi:hasDimensionScore ?ds_ad .
+
+    ?c asbpi:companyName ?name ;
+       asbpi:inDomain ?d .
+    ?d rdfs:label ?domain .
+
+    ?ds_mc asbpi:forDimension asbpi:ModelCapability ;
+           asbpi:dimensionValue ?mc .
+    ?ds_ad asbpi:forDimension asbpi:AutonomyDepth ;
+           asbpi:dimensionValue ?ad .
+
+    # Get latest week
+    ?sr asbpi:forWeek ?w .
+    FILTER NOT EXISTS {
+        ?w2 asbpi:previousWeek ?w .
+    }
+
+    FILTER(?mc > 70 && ?ad < 50)
+
+    BIND("MODEL-AUTONOMY GAP: Strong AI capability but weak agent architecture. Building tools, not agents." AS ?interpretation)
+}
+ORDER BY DESC(?mc - ?ad)

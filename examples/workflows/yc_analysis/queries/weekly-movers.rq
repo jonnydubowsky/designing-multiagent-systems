@@ -1,0 +1,31 @@
+# Weekly Movers — Biggest delta changes in latest week
+# Schedule: Nightly (surfaces week-over-week momentum)
+# Intent: Detect AI agent companies gaining or losing ground fastest
+
+PREFIX asbpi: <https://shurai.com/ontology/ai-agent-sbpi#>
+PREFIX xsd:  <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?name ?composite ?delta ?tier ?domain ?isAgent ?rationale
+WHERE {
+    ?sr a asbpi:ScoreRecord ;
+        asbpi:forCompany ?c ;
+        asbpi:compositeScore ?composite ;
+        asbpi:delta ?delta ;
+        asbpi:inTier ?t ;
+        asbpi:scoringRationale ?rationale .
+
+    ?c asbpi:companyName ?name ;
+       asbpi:isAgent ?isAgent ;
+       asbpi:inDomain ?d .
+    ?d rdfs:label ?domain .
+    ?t rdfs:label ?tier .
+
+    # Get latest week dynamically
+    ?sr asbpi:forWeek ?w .
+    FILTER NOT EXISTS {
+        ?w2 asbpi:previousWeek ?w .
+    }
+    FILTER(ABS(?delta) > 0)
+}
+ORDER BY DESC(ABS(?delta))
+LIMIT 20

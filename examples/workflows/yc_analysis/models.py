@@ -13,6 +13,8 @@ class WorkflowConfig(BaseModel):
     data_dir: str = "./data"  # Keep data within the package
     azure_endpoint: Optional[str] = None
     azure_deployment: str = "gpt-4.1-mini"  # Updated to user's deployment
+    anthropic_model: str = "claude-sonnet-4-5"  # Anthropic model for classification
+    use_anthropic: bool = True  # Use Anthropic instead of Azure OpenAI
     batch_size: int = 10
     force_refresh: bool = False
     sample_size: Optional[int] = None  # For testing: limit to N companies

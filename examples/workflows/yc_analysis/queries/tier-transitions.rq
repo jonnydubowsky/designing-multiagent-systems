@@ -1,0 +1,42 @@
+# Tier Transitions — Companies that changed tiers between weeks
+# Schedule: Weekly (surfaces structural shifts in competitive landscape)
+# Intent: Detect tier boundary crossings in the AI agent vertical
+
+PREFIX asbpi: <https://shurai.com/ontology/ai-agent-sbpi#>
+PREFIX rdfs:  <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX xsd:   <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?name ?domain ?prevWeek ?prevTier ?prevScore ?currWeek ?currTier ?currScore ?direction
+WHERE {
+    # Current week score
+    ?sr1 a asbpi:ScoreRecord ;
+         asbpi:forCompany ?c ;
+         asbpi:forWeek ?w1 ;
+         asbpi:compositeScore ?currScore ;
+         asbpi:inTier ?t1 .
+    ?t1 rdfs:label ?currTier .
+    ?w1 asbpi:weekLabel ?currWeek .
+
+    # Previous week score
+    ?sr2 a asbpi:ScoreRecord ;
+         asbpi:forCompany ?c ;
+         asbpi:forWeek ?w2 ;
+         asbpi:compositeScore ?prevScore ;
+         asbpi:inTier ?t2 .
+    ?t2 rdfs:label ?prevTier .
+    ?w2 asbpi:weekLabel ?prevWeek .
+
+    # Link weeks
+    ?w1 asbpi:previousWeek ?w2 .
+
+    # Company info
+    ?c asbpi:companyName ?name ;
+       asbpi:inDomain ?d .
+    ?d rdfs:label ?domain .
+
+    # Only show tier changes
+    FILTER(?currTier != ?prevTier)
+
+    BIND(IF(?currScore > ?prevScore, "PROMOTED", "DEMOTED") AS ?direction)
+}
+ORDER BY ?direction ?name

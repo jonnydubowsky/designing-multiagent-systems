@@ -15,6 +15,7 @@ from typing import Any, Dict
 import pandas as pd
 
 from picoagents.llm import AzureOpenAIChatCompletionClient
+from picoagents.llm import AnthropicChatCompletionClient
 from picoagents.messages import SystemMessage, UserMessage
 from picoagents.workflow import Context
 
@@ -279,12 +280,18 @@ async def classify_agents(
     if len(to_process) == 0:
         all_results = list(processed.values())
     else:
-        # Initialize Azure client
-        client = AzureOpenAIChatCompletionClient(
-            azure_endpoint=config.azure_endpoint or os.getenv("AZURE_OPENAI_ENDPOINT"),
-            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
-            azure_deployment=config.azure_deployment,
-        )
+        # Initialize LLM client (Anthropic or Azure)
+        if config.use_anthropic:
+            client = AnthropicChatCompletionClient(
+                model=config.anthropic_model,
+                api_key=os.getenv("ANTHROPIC_API_KEY"),
+            )
+        else:
+            client = AzureOpenAIChatCompletionClient(
+                azure_endpoint=config.azure_endpoint or os.getenv("AZURE_OPENAI_ENDPOINT"),
+                api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+                azure_deployment=config.azure_deployment,
+            )
 
         # Define domain categories with descriptions
         allowed_domains = {

@@ -1,0 +1,42 @@
+# Predictive Signals — Forward-looking indicators from historical patterns
+# Schedule: Nightly (feeds prediction market signal generation)
+# Intent: Detect momentum patterns that predict next-week movements.
+# Two consecutive weeks of same-direction delta = momentum signal.
+
+PREFIX asbpi: <https://shurai.com/ontology/ai-agent-sbpi#>
+PREFIX xsd:   <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?name ?w1Label ?delta1 ?w2Label ?delta2 ?momentum ?signalStrength ?predDirection
+WHERE {
+    # Week 1 (more recent)
+    ?sr1 a asbpi:ScoreRecord ;
+         asbpi:forCompany ?c ;
+         asbpi:forWeek ?w1 ;
+         asbpi:delta ?delta1 ;
+         asbpi:compositeScore ?score1 .
+    ?w1 asbpi:weekLabel ?w1Label .
+
+    # Week 2 (previous)
+    ?sr2 a asbpi:ScoreRecord ;
+         asbpi:forCompany ?c ;
+         asbpi:forWeek ?w2 ;
+         asbpi:delta ?delta2 ;
+         asbpi:compositeScore ?score2 .
+    ?w2 asbpi:weekLabel ?w2Label .
+
+    # Temporal link
+    ?w1 asbpi:previousWeek ?w2 .
+
+    ?c asbpi:companyName ?name .
+
+    # Both deltas same direction
+    FILTER(
+        (?delta1 > 0 && ?delta2 > 0) ||
+        (?delta1 < 0 && ?delta2 < 0)
+    )
+
+    BIND(?delta1 + ?delta2 AS ?momentum)
+    BIND(ABS(?momentum) AS ?signalStrength)
+    BIND(IF(?momentum > 0, "BULLISH", "BEARISH") AS ?predDirection)
+}
+ORDER BY DESC(?signalStrength)

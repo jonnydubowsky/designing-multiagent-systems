@@ -1,0 +1,80 @@
+# Compound Anomaly Detection — Companies with multiple concurrent anomaly types
+# Schedule: Nightly (surfaces high-attention companies)
+# Intent: Find AI agent companies where multiple risk/opportunity signals overlap.
+# A company near a tier boundary WITH momentum AND dimension divergence
+# is either about to break out or collapse.
+
+PREFIX asbpi: <https://shurai.com/ontology/ai-agent-sbpi#>
+PREFIX rdfs:  <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX xsd:   <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?name ?composite ?tierLabel ?domain ?anomalyCount
+       ?hasMomentum ?hasDivergence ?nearBoundary
+       ?momentumDir ?maxGap ?boundaryDist
+WHERE {
+    # Base: company with score in latest week
+    ?sr a asbpi:ScoreRecord ;
+        asbpi:forCompany ?c ;
+        asbpi:forWeek ?w ;
+        asbpi:compositeScore ?composite ;
+        asbpi:delta ?delta ;
+        asbpi:inTier ?tier .
+
+    ?c asbpi:companyName ?name ;
+       asbpi:slug ?slug ;
+       asbpi:inDomain ?d .
+    ?d rdfs:label ?domain .
+    ?tier rdfs:label ?tierLabel ;
+          asbpi:tierFloor ?tierFloor ;
+          asbpi:tierCeiling ?tierCeiling .
+
+    # Latest week only
+    FILTER NOT EXISTS { ?w2 asbpi:previousWeek ?w . }
+
+    # Check 1: Momentum (2 consecutive same-direction deltas)
+    OPTIONAL {
+        ?sr2 a asbpi:ScoreRecord ;
+             asbpi:forCompany ?c ;
+             asbpi:forWeek ?prevW ;
+             asbpi:delta ?prevDelta .
+        ?w asbpi:previousWeek ?prevW .
+        FILTER(
+            (?delta > 0 && ?prevDelta > 0) ||
+            (?delta < 0 && ?prevDelta < 0)
+        )
+    }
+    BIND(BOUND(?prevDelta) AS ?hasMomentum)
+    BIND(IF(?hasMomentum, IF(?delta > 0, "BULLISH", "BEARISH"), "NONE") AS ?momentumDir)
+
+    # Check 2: Dimension divergence (any dimension > 15 points from composite)
+    OPTIONAL {
+        SELECT ?sr2check (MAX(ABS(?gapCalc)) AS ?maxGapVal)
+        WHERE {
+            ?sr2check a asbpi:ScoreRecord ;
+                      asbpi:compositeScore ?comp2 ;
+                      asbpi:hasDimensionScore ?ds2 .
+            ?ds2 asbpi:dimensionValue ?dv2 .
+            BIND((?dv2 - ?comp2) AS ?gapCalc)
+            FILTER(ABS(?gapCalc) > 15)
+        }
+        GROUP BY ?sr2check
+    }
+    BIND(BOUND(?maxGapVal) AS ?hasDivergence)
+    BIND(IF(BOUND(?maxGapVal), ?maxGapVal, 0) AS ?maxGap)
+
+    # Check 3: Near tier boundary (within 5 points of floor or ceiling)
+    BIND((?composite - ?tierFloor) AS ?distFloor)
+    BIND((?tierCeiling - ?composite) AS ?distCeiling)
+    BIND(IF(?distFloor < 5, ?distFloor, ?distCeiling) AS ?boundaryDist)
+    BIND(?distFloor < 5 || ?distCeiling < 5 AS ?nearBoundary)
+
+    # Count anomaly types
+    BIND(
+        (IF(?hasMomentum, 1, 0) + IF(?hasDivergence, 1, 0) + IF(?nearBoundary, 1, 0))
+        AS ?anomalyCount
+    )
+
+    # Only show companies with 2+ concurrent anomaly types
+    FILTER(?anomalyCount >= 2)
+}
+ORDER BY DESC(?anomalyCount) ?name

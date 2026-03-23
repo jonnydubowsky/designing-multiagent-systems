@@ -1,0 +1,178 @@
+@prefix sh:      <http://www.w3.org/ns/shacl#> .
+@prefix xsd:     <http://www.w3.org/2001/XMLSchema#> .
+@prefix rdfs:    <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix asbpi:   <https://shurai.com/ontology/ai-agent-sbpi#> .
+
+# =============================================================================
+# SHACL Shapes for AI Agent SBPI Ontology
+# Validates data integrity on every ETL load
+# =============================================================================
+
+# --- AgentCompany Shape ---
+asbpi:AgentCompanyShape a sh:NodeShape ;
+    sh:targetClass asbpi:AgentCompany ;
+    sh:property [
+        sh:path asbpi:companyName ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:name "company name" ;
+    ] ;
+    sh:property [
+        sh:path asbpi:slug ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:pattern "^[a-z][a-z0-9_-]*$" ;
+        sh:name "URL-safe slug" ;
+    ] ;
+    sh:property [
+        sh:path asbpi:isAgent ;
+        sh:datatype xsd:boolean ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:name "agent classification" ;
+    ] ;
+    sh:property [
+        sh:path asbpi:isAboutAI ;
+        sh:datatype xsd:boolean ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:name "AI classification" ;
+    ] ;
+    sh:property [
+        sh:path asbpi:inDomain ;
+        sh:class asbpi:DomainCategory ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:name "domain category" ;
+    ] ;
+    sh:property [
+        sh:path asbpi:inVertical ;
+        sh:class asbpi:Vertical ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:name "vertical" ;
+    ] .
+
+# --- ScoreRecord Shape ---
+asbpi:ScoreRecordShape a sh:NodeShape ;
+    sh:targetClass asbpi:ScoreRecord ;
+    sh:property [
+        sh:path asbpi:forCompany ;
+        sh:class asbpi:AgentCompany ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:name "company reference" ;
+    ] ;
+    sh:property [
+        sh:path asbpi:forWeek ;
+        sh:class asbpi:Week ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:name "week reference" ;
+    ] ;
+    sh:property [
+        sh:path asbpi:compositeScore ;
+        sh:datatype xsd:decimal ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:minInclusive 0 ;
+        sh:maxInclusive 100 ;
+        sh:name "composite score" ;
+    ] ;
+    sh:property [
+        sh:path asbpi:delta ;
+        sh:datatype xsd:decimal ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:name "week-over-week delta" ;
+    ] ;
+    sh:property [
+        sh:path asbpi:inTier ;
+        sh:class asbpi:Tier ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:name "tier assignment" ;
+    ] ;
+    sh:property [
+        sh:path asbpi:hasDimensionScore ;
+        sh:class asbpi:DimensionScore ;
+        sh:minCount 5 ;
+        sh:maxCount 5 ;
+        sh:name "dimension scores (exactly 5)" ;
+    ] .
+
+# --- DimensionScore Shape ---
+asbpi:DimensionScoreShape a sh:NodeShape ;
+    sh:targetClass asbpi:DimensionScore ;
+    sh:property [
+        sh:path asbpi:forDimension ;
+        sh:class asbpi:Dimension ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:name "dimension reference" ;
+    ] ;
+    sh:property [
+        sh:path asbpi:dimensionValue ;
+        sh:datatype xsd:integer ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:minInclusive 0 ;
+        sh:maxInclusive 100 ;
+        sh:name "dimension value" ;
+    ] .
+
+# --- Week Shape ---
+asbpi:WeekShape a sh:NodeShape ;
+    sh:targetClass asbpi:Week ;
+    sh:property [
+        sh:path asbpi:weekLabel ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:pattern "^W[0-9]{1,2}-[0-9]{4}$" ;
+        sh:name "week label format" ;
+    ] .
+
+# --- Attestation Shape ---
+asbpi:AttestationShape a sh:NodeShape ;
+    sh:targetClass asbpi:Attestation ;
+    sh:property [
+        sh:path asbpi:confidence ;
+        sh:datatype xsd:decimal ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:minInclusive 0.0 ;
+        sh:maxInclusive 1.0 ;
+        sh:name "confidence score" ;
+    ] ;
+    sh:property [
+        sh:path asbpi:sourceType ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:in ( "expert_judgment"^^xsd:string "primary_data"^^xsd:string "secondary_analysis"^^xsd:string "automated_inference"^^xsd:string ) ;
+        sh:name "source type" ;
+    ] .
+
+# --- Prediction Shape ---
+asbpi:PredictionShape a sh:NodeShape ;
+    sh:targetClass asbpi:Prediction ;
+    sh:property [
+        sh:path asbpi:predictionDirection ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:in ( "up"^^xsd:string "down"^^xsd:string "stable"^^xsd:string "volatile"^^xsd:string ) ;
+        sh:name "prediction direction" ;
+    ] ;
+    sh:property [
+        sh:path asbpi:predictionConfidence ;
+        sh:datatype xsd:decimal ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:minInclusive 0.0 ;
+        sh:maxInclusive 0.95 ;
+        sh:name "prediction confidence" ;
+    ] .
